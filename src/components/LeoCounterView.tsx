@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  PlusCircle, 
   DollarSign, 
   Percent, 
   ShoppingBag, 
@@ -10,17 +9,21 @@ import {
   Trash2, 
   CheckCircle2, 
   AlertCircle, 
-  Clock, 
   MessageSquare,
-  Sparkles,
   Download,
-  Share2,
   ExternalLink,
   Volume2,
-  VolumeX
+  VolumeX,
+  UserPlus
 } from 'lucide-react';
 import { Personal, Sale, AppSettings } from '../types';
-import { formatCurrencyBRL, buildWhatsAppMessage } from '../services/webhookService';
+import { 
+  formatCurrencyBRL, 
+  buildWhatsAppMessage, 
+  parseBRL, 
+  toLocalDateTimeInput,
+  computeMonthStanding
+} from '../services/webhookService';
 import { playSuccessChime } from '../services/audioService';
 
 interface LeoCounterViewProps {
@@ -37,6 +40,7 @@ interface LeoCounterViewProps {
   onResendWebhook: (sale: Sale) => Promise<void>;
   onDeleteSale: (saleId: string) => void;
   preselectedPersonalId?: string;
+  onNavigateToPersonais?: () => void;
 }
 
 export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
@@ -46,23 +50,49 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   onAddSale,
   onResendWebhook,
   onDeleteSale,
-  preselectedPersonalId
+  preselectedPersonalId,
+  onNavigateToPersonais
 }) => {
+  // Apenas personais ativos
+  const activePersonais = useMemo(() => personais.filter((p) => p.active), [personais]);
+
+  // Seletor inicial: se preselectedPersonalId for de um ativo, usa; senão primeiro ativo
+  const initialPersonalId = useMemo(() => {
+    if (preselectedPersonalId && activePersonais.some((p) => p.id === preselectedPersonalId)) {
+      return preselectedPersonalId;
+    }
+    return activePersonais[0]?.id || '';
+  }, [preselectedPersonalId, activePersonais]);
+
   // Form State
-  const [personalId, setPersonalId] = useState<string>(preselectedPersonalId || personais[0]?.id || '');
+  const [personalId, setPersonalId] = useState<string>(initialPersonalId);
   const [clientName, setClientName] = useState<string>('');
   const [valueStr, setValueStr] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
-  const [dateStr, setDateStr] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [dateStr, setDateStr] = useState<string>(() => toLocalDateTimeInput(new Date()));
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
+  // Sincroniza personalId caso o selecionado fique inativo ou a lista mude
+  useEffect(() => {
+    if (!activePersonais.some((p) => p.id === personalId)) {
+      setPersonalId(activePersonais[0]?.id || '');
+    }
+  }, [activePersonais, personalId]);
+
   // Selected Personal
   const selectedPersonal = useMemo(
-    () => personais.find((p) => p.id === personalId) || personais[0],
-    [personais, personalId]
+    () => activePersonais.find((p) => p.id === personalId) || activePersonais[0] || null,
+    [activePersonais, personalId]
   );
+
+  // Numeric value helper usando parseBRL
+  const parsedValue = useMemo(() => {
+    return parseBRL(valueStr);
+  }, [valueStr]);
+
+  const calculatedPoints = Math.round(parsedValue);
 
   // Metric calculations for current month
   const currentMonthMetrics = useMemo(() => {
@@ -86,43 +116,31 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
     };
   }, [sales, settings.commissionRate]);
 
-  // Numeric value helper
-  const parsedValue = useMemo(() => {
-    const clean = valueStr.replace(',', '.').replace(/[^0-9.]/g, '');
-    const num = parseFloat(clean);
-    return isNaN(num) ? 0 : num;
-  }, [valueStr]);
-
-  const calculatedPoints = Math.round(parsedValue);
-
-  // Personal's current ranking and month points
+  // Personal's current ranking and month points (batendo com o que será enviado no payload)
   const personalMonthStats = useMemo(() => {
     if (!selectedPersonal) return { rank: 1, points: 0 };
-    const now = new Date();
-    const monthSales = sales.filter((s) => {
-      const d = new Date(s.timestamp);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-
-    const pointsMap = new Map<string, number>();
-    personais.forEach((p) => pointsMap.set(p.id, 0));
-    monthSales.forEach((s) => {
-      pointsMap.set(s.personalId, (pointsMap.get(s.personalId) || 0) + s.pointsAdded);
-    });
-
-    const sorted = Array.from(pointsMap.entries()).sort((a, b) => b[1] - a[1]);
-    const rankIndex = sorted.findIndex(([id]) => id === selectedPersonal.id);
-    const currentPoints = pointsMap.get(selectedPersonal.id) || 0;
-
-    return {
-      rank: rankIndex >= 0 ? rankIndex + 1 : 1,
-      points: currentPoints
+    if (calculatedPoints <= 0) {
+      const standing = computeMonthStanding(sales, personais, selectedPersonal.id, dateStr);
+      return { rank: standing.rank, points: standing.monthPoints };
+    }
+    const virtualSale: Sale = {
+      id: 'preview',
+      personalId: selectedPersonal.id,
+      personalName: selectedPersonal.name,
+      clientName: clientName.trim() || 'Cliente Balcão',
+      value: parsedValue,
+      pointsAdded: calculatedPoints,
+      notes: notes.trim(),
+      timestamp: new Date(dateStr).toISOString(),
+      webhookStatus: 'pending'
     };
-  }, [sales, personais, selectedPersonal]);
+    const standing = computeMonthStanding([virtualSale, ...sales], personais, selectedPersonal.id, dateStr);
+    return { rank: standing.rank, points: standing.monthPoints };
+  }, [sales, personais, selectedPersonal, calculatedPoints, parsedValue, clientName, notes, dateStr]);
 
   // Live WhatsApp message preview
   const liveMessagePreview = useMemo(() => {
-    if (!selectedPersonal) return '';
+    if (!selectedPersonal) return 'Cadastre um personal parceiro para visualizar o preview da mensagem.';
     return buildWhatsAppMessage({
       template: settings.whatsappTemplate,
       personal: selectedPersonal,
@@ -133,7 +151,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
         pointsAdded: calculatedPoints || 0
       },
       currentRank: personalMonthStats.rank,
-      totalPoints: personalMonthStats.points + (calculatedPoints || 0)
+      totalPoints: personalMonthStats.points
     });
   }, [selectedPersonal, clientName, parsedValue, notes, calculatedPoints, personalMonthStats, settings.whatsappTemplate]);
 
@@ -147,7 +165,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!personalId || parsedValue <= 0) {
+    if (!selectedPersonal || parsedValue <= 0) {
       alert('Por favor, selecione um personal e informe um valor de venda válido.');
       return;
     }
@@ -155,7 +173,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
     setIsSubmitting(true);
     try {
       await onAddSale({
-        personalId,
+        personalId: selectedPersonal.id,
         clientName: clientName.trim() || 'Cliente Balcão',
         value: parsedValue,
         notes: notes.trim() || 'Suplementos New Fit',
@@ -166,11 +184,11 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
         playSuccessChime();
       }
 
-      // Reset form
+      // Reset form com horário local
       setClientName('');
       setValueStr('');
       setNotes('');
-      setDateStr(new Date().toISOString().slice(0, 16));
+      setDateStr(toLocalDateTimeInput(new Date()));
 
       setSuccessToast(`Venda de ${formatCurrencyBRL(parsedValue)} registrada e fluxo disparado com sucesso!`);
       setTimeout(() => setSuccessToast(null), 4000);
@@ -358,6 +376,27 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
         </div>
       )}
 
+      {/* ALERTA DE ESTADO VAZIO: NENHUM PERSONAL ATIVO */}
+      {activePersonais.length === 0 && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-lg">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-[#F5A623] shrink-0" />
+            <span className="text-xs sm:text-sm">
+              Nenhum personal ativo cadastrado. Cadastre um personal parceiro para habilitar o lançamento de vendas.
+            </span>
+          </div>
+          {onNavigateToPersonais && (
+            <button
+              onClick={onNavigateToPersonais}
+              className="bg-[#F5A623] hover:bg-[#e5971a] text-black text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 shadow"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Cadastrar Personal</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 2. FORMULÁRIO DE VENDA RÁPIDA + PREVIEW DE WHATSAPP */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
@@ -379,7 +418,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
 
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* Campo 1: Selecionar Personal */}
+            {/* Campo 1: Selecionar Personal (Apenas Ativos) */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center justify-between">
                 <span>1. Personal Partner (Cupom)</span>
@@ -393,14 +432,19 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
               <select
                 value={personalId}
                 onChange={(e) => setPersonalId(e.target.value)}
-                className="w-full bg-[#0D0E11] border border-white/[0.12] focus:border-[#F5A623] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition cursor-pointer"
+                disabled={activePersonais.length === 0}
+                className="w-full bg-[#0D0E11] border border-white/[0.12] focus:border-[#F5A623] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition cursor-pointer disabled:opacity-50"
                 required
               >
-                {personais.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#16171B] text-white">
-                    {p.name} — {p.gym} ({p.code})
-                  </option>
-                ))}
+                {activePersonais.length === 0 ? (
+                  <option value="">Nenhum personal ativo disponível</option>
+                ) : (
+                  activePersonais.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-[#16171B] text-white">
+                      {p.name} — {p.gym} ({p.code})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -422,7 +466,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
             {/* Grid 2 colunas: Valor e Data */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
-              {/* Campo 3: Valor da Venda em R$ */}
+              {/* Campo 3: Valor da Venda em R$ com parseBRL e confirmação visual */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
@@ -441,16 +485,22 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="Ex: 675,80"
+                    placeholder="Ex: 1.250,00"
                     value={valueStr}
                     onChange={(e) => setValueStr(e.target.value)}
                     className="w-full bg-[#0D0E11] border border-white/[0.12] focus:border-[#F5A623] rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono font-bold text-white placeholder-zinc-600 focus:outline-none transition"
                     required
                   />
                 </div>
+                {/* Mostra abaixo do campo o valor interpretado formatado em R$ */}
+                {parsedValue > 0 && (
+                  <p className="text-[11px] font-mono text-zinc-400 mt-1">
+                    Será registrado: <span className="text-[#F5A623] font-semibold">{formatCurrencyBRL(parsedValue)}</span>
+                  </p>
+                )}
               </div>
 
-              {/* Campo 4: Data e Hora */}
+              {/* Campo 4: Data e Hora em horário local */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
                   4. Data & Horário
@@ -498,7 +548,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
             <div className="pt-4">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !selectedPersonal || parsedValue <= 0}
                 className="w-full py-3.5 px-4 bg-[#F5A623] hover:bg-[#e5971a] active:scale-[0.99] disabled:opacity-50 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-[#F5A623]/20 transition flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
@@ -561,16 +611,16 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
             <div className="p-3 bg-[#121316] rounded-xl border border-white/[0.06] space-y-1.5 text-xs text-zinc-400">
               <div className="flex justify-between">
                 <span>Personal Destino:</span>
-                <span className="font-semibold text-white">{selectedPersonal?.name}</span>
+                <span className="font-semibold text-white">{selectedPersonal?.name || 'Nenhum'}</span>
               </div>
               <div className="flex justify-between">
-                <span>Posição Atual:</span>
+                <span>Posição no Mês:</span>
                 <span className="font-mono text-[#F5A623] font-bold">{personalMonthStats.rank}º lugar</span>
               </div>
               <div className="flex justify-between">
-                <span>Pontos Acumulados:</span>
+                <span>Total Acumulado:</span>
                 <span className="font-mono text-white">
-                  {(personalMonthStats.points + (calculatedPoints || 0)).toLocaleString('pt-BR')} pts
+                  {personalMonthStats.points.toLocaleString('pt-BR')} pts
                 </span>
               </div>
             </div>
@@ -605,94 +655,102 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
-                {sales.slice(0, 15).map((sale) => {
-                  const saleDate = new Date(sale.timestamp);
-                  const isSuccess = sale.webhookStatus === 'success';
+                {sales.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-zinc-500 text-xs">
+                      Nenhuma venda registrada ainda neste aparelho.
+                    </td>
+                  </tr>
+                ) : (
+                  sales.slice(0, 15).map((sale) => {
+                    const saleDate = new Date(sale.timestamp);
+                    const isSuccess = sale.webhookStatus === 'success';
 
-                  return (
-                    <tr key={sale.id} className="hover:bg-white/[0.02] transition">
-                      
-                      {/* Data / Hora */}
-                      <td className="py-3 px-4 text-zinc-400 font-mono text-[11px] whitespace-nowrap">
-                        {saleDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{' '}
-                        {saleDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
+                    return (
+                      <tr key={sale.id} className="hover:bg-white/[0.02] transition">
+                        
+                        {/* Data / Hora */}
+                        <td className="py-3 px-4 text-zinc-400 font-mono text-[11px] whitespace-nowrap">
+                          {saleDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{' '}
+                          {saleDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
 
-                      {/* Personal */}
-                      <td className="py-3 px-4 font-semibold text-white">
-                        {sale.personalName}
-                      </td>
+                        {/* Personal */}
+                        <td className="py-3 px-4 font-semibold text-white">
+                          {sale.personalName}
+                        </td>
 
-                      {/* Aluno */}
-                      <td className="py-3 px-4 text-zinc-300">
-                        {sale.clientName}
-                      </td>
+                        {/* Aluno */}
+                        <td className="py-3 px-4 text-zinc-300">
+                          {sale.clientName}
+                        </td>
 
-                      {/* Itens */}
-                      <td className="py-3 px-4 text-zinc-400 max-w-[200px] truncate" title={sale.notes}>
-                        {sale.notes}
-                      </td>
+                        {/* Itens */}
+                        <td className="py-3 px-4 text-zinc-400 max-w-[200px] truncate" title={sale.notes}>
+                          {sale.notes}
+                        </td>
 
-                      {/* Valor */}
-                      <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap">
-                        {formatCurrencyBRL(sale.value)}
-                      </td>
+                        {/* Valor */}
+                        <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap">
+                          {formatCurrencyBRL(sale.value)}
+                        </td>
 
-                      {/* Pontos */}
-                      <td className="py-3 px-4 text-center font-mono text-[#F5A623] font-bold">
-                        +{sale.pointsAdded}
-                      </td>
+                        {/* Pontos */}
+                        <td className="py-3 px-4 text-center font-mono text-[#F5A623] font-bold">
+                          +{sale.pointsAdded}
+                        </td>
 
-                      {/* Status Webhook */}
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                            isSuccess
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                              : 'bg-red-500/10 text-red-400 border-red-500/30'
-                          }`}
-                        >
-                          {isSuccess ? (
-                            <>
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              <span>Enviado</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="w-3 h-3 text-red-400" />
-                              <span>Falha</span>
-                            </>
-                          )}
-                        </span>
-                      </td>
-
-                      {/* Ações */}
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => onResendWebhook(sale)}
-                            className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-[#F5A623] transition"
-                            title="Reenviar Webhook"
+                        {/* Status Webhook */}
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                              isSuccess
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                : 'bg-red-500/10 text-red-400 border-red-500/30'
+                            }`}
                           >
-                            <RotateCw className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Deseja excluir a venda de ${formatCurrencyBRL(sale.value)} do aluno ${sale.clientName}? Os pontos serão estornados.`)) {
-                                onDeleteSale(sale.id);
-                              }
-                            }}
-                            className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition"
-                            title="Excluir Venda"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+                            {isSuccess ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <span>Enviado</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="w-3 h-3 text-red-400" />
+                                <span>Falha</span>
+                              </>
+                            )}
+                          </span>
+                        </td>
 
-                    </tr>
-                  );
-                })}
+                        {/* Ações */}
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => onResendWebhook(sale)}
+                              className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-[#F5A623] transition"
+                              title="Reenviar Webhook"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`A venda será removida do ranking deste aparelho. Ela continua registrada na planilha do Google — exclua lá também.`)) {
+                                  onDeleteSale(sale.id);
+                                }
+                              }}
+                              className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition"
+                              title="Excluir Venda"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

@@ -21,8 +21,33 @@ import { PinModal } from './components/PinModal';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
-  sendSaleWebhook 
+  sendSaleWebhook,
+  computeMonthStanding
 } from './services/webhookService';
+
+// Migração única v2: limpa dados de mock antigos e remove webhookUrl de exemplo
+if (typeof window !== 'undefined') {
+  const version = localStorage.getItem('newfit_data_version');
+  if (version !== '2') {
+    localStorage.removeItem('newfit_personais');
+    localStorage.removeItem('newfit_sales');
+    localStorage.removeItem('newfit_webhook_logs');
+
+    const savedSettings = localStorage.getItem('newfit_settings');
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.webhookUrl === 'https://n8n.webhook.newfit.com.br/webhook/venda-personal') {
+          parsed.webhookUrl = '';
+          localStorage.setItem('newfit_settings', JSON.stringify(parsed));
+        }
+      } catch (e) {
+        // ignora erro de parse
+      }
+    }
+    localStorage.setItem('newfit_data_version', '2');
+  }
+}
 
 export function App() {
   // 1. PERSISTENT STATE (LOCALSTORAGE)
@@ -65,6 +90,7 @@ export function App() {
 
   // 2. UI NAVIGATION STATE
   const [activeTab, setActiveTab] = useState<'ranking' | 'balcao' | 'personais' | 'webhook'>('ranking');
+  const [pendingTab, setPendingTab] = useState<'ranking' | 'balcao' | 'personais' | 'webhook'>('balcao');
   const [period, setPeriod] = useState<PeriodFilter>('month');
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
@@ -82,6 +108,16 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isTvMode]);
 
+  // Navegação com trava de PIN para áreas administrativas
+  const handleNavigateToTab = (tab: 'ranking' | 'balcao' | 'personais' | 'webhook') => {
+    if (tab !== 'ranking' && !isUnlocked) {
+      setPendingTab(tab);
+      setIsPinModalOpen(true);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
   // 3. ACTION: ADD SALE & DISPATCH WEBHOOK
   const handleAddSale = async (data: {
     personalId: string;
@@ -96,42 +132,6 @@ export function App() {
     const pointsAdded = Math.round(data.value);
     const saleId = 's_' + Date.now();
 
-    // Compute updated month points and ranking
-    const now = new Date();
-    const currentMonthSales = sales.filter((s) => {
-      const d = new Date(s.timestamp);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-
-    const pointsMap = new Map<string, number>();
-    personais.forEach((p) => pointsMap.set(p.id, 0));
-    currentMonthSales.forEach((s) => {
-      pointsMap.set(s.personalId, (pointsMap.get(s.personalId) || 0) + s.pointsAdded);
-    });
-
-    // Add new points
-    const newTotalPoints = (pointsMap.get(personal.id) || 0) + pointsAdded;
-    pointsMap.set(personal.id, newTotalPoints);
-
-    // Sort to get ranking
-    const sorted = Array.from(pointsMap.entries()).sort((a, b) => b[1] - a[1]);
-    const currentRank = sorted.findIndex(([id]) => id === personal.id) + 1;
-
-    // Build WhatsApp message
-    const whatsappMessagePreview = buildWhatsAppMessage({
-      template: settings.whatsappTemplate,
-      personal,
-      sale: {
-        clientName: data.clientName,
-        value: data.value,
-        notes: data.notes,
-        pointsAdded
-      },
-      currentRank,
-      totalPoints: newTotalPoints
-    });
-
-    // Build official webhook payload
     const newSaleItem: Sale = {
       id: saleId,
       personalId: personal.id,
@@ -144,11 +144,28 @@ export function App() {
       webhookStatus: 'pending'
     };
 
+    // Calcula posição e total do mês incluindo a nova venda
+    const standing = computeMonthStanding([newSaleItem, ...sales], personais, personal.id, newSaleItem.timestamp);
+
+    // Build WhatsApp message
+    const whatsappMessagePreview = buildWhatsAppMessage({
+      template: settings.whatsappTemplate,
+      personal,
+      sale: {
+        clientName: data.clientName,
+        value: data.value,
+        notes: data.notes,
+        pointsAdded
+      },
+      currentRank: standing.rank,
+      totalPoints: standing.monthPoints
+    });
+
     const payload = buildWebhookPayload({
       sale: newSaleItem,
       personal,
-      currentRank,
-      currentMonthPoints: newTotalPoints,
+      currentRank: standing.rank,
+      currentMonthPoints: standing.monthPoints,
       whatsappMessagePreview
     });
 
@@ -185,18 +202,23 @@ export function App() {
     const personal = personais.find((p) => p.id === sale.personalId);
     if (!personal) return;
 
+    // Usa a data da própria venda como referência; a venda já está na lista, não soma pontos de novo
+    const standing = computeMonthStanding(sales, personais, personal.id, sale.timestamp);
+
+    const whatsappMessagePreview = buildWhatsAppMessage({
+      template: settings.whatsappTemplate,
+      personal,
+      sale,
+      currentRank: standing.rank,
+      totalPoints: standing.monthPoints
+    });
+
     const payload = buildWebhookPayload({
       sale,
       personal,
-      currentRank: 1,
-      currentMonthPoints: sale.pointsAdded,
-      whatsappMessagePreview: buildWhatsAppMessage({
-        template: settings.whatsappTemplate,
-        personal,
-        sale,
-        currentRank: 1,
-        totalPoints: sale.pointsAdded
-      })
+      currentRank: standing.rank,
+      currentMonthPoints: standing.monthPoints,
+      whatsappMessagePreview
     });
 
     const res = await sendSaleWebhook({
@@ -240,7 +262,7 @@ export function App() {
   // Quick sale shortcut from leaderboard
   const handleSelectPersonalForSale = (pId: string) => {
     setPreselectedPersonalId(pId);
-    setActiveTab('balcao');
+    handleNavigateToTab('balcao');
   };
 
   return (
@@ -249,19 +271,17 @@ export function App() {
       {/* NAVBAR PRINCIPAL */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (tab === 'balcao' && !isUnlocked) {
-            setIsPinModalOpen(true);
-            return;
-          }
-          setActiveTab(tab);
+        setActiveTab={handleNavigateToTab}
+        onOpenTvMode={() => {
+          setIsUnlocked(false);
+          setIsTvMode(true);
         }}
-        onOpenTvMode={() => setIsTvMode(true)}
         isUnlocked={isUnlocked}
         onLockClick={() => {
           if (isUnlocked) {
             setIsUnlocked(false);
           } else {
+            setPendingTab(activeTab === 'ranking' ? 'balcao' : activeTab);
             setIsPinModalOpen(true);
           }
         }}
@@ -277,6 +297,7 @@ export function App() {
             period={period}
             setPeriod={setPeriod}
             onSelectPersonalForSale={handleSelectPersonalForSale}
+            onNavigateToPersonais={() => handleNavigateToTab('personais')}
           />
         )}
 
@@ -289,6 +310,7 @@ export function App() {
             onResendWebhook={handleResendWebhook}
             onDeleteSale={handleDeleteSale}
             preselectedPersonalId={preselectedPersonalId}
+            onNavigateToPersonais={() => handleNavigateToTab('personais')}
           />
         )}
 
@@ -327,7 +349,7 @@ export function App() {
         onSuccess={() => {
           setIsUnlocked(true);
           setIsPinModalOpen(false);
-          setActiveTab('balcao');
+          setActiveTab(pendingTab);
         }}
       />
 

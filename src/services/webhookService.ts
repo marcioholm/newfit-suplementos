@@ -8,6 +8,113 @@ export function formatCurrencyBRL(value: number): string {
 }
 
 /**
+ * Converte input de string de valor monetário (padrão BRL ou US) para number float.
+ * Aceita: "675,80" -> 675.8 | "675.80" -> 675.8 | "1.250,00" -> 1250 | "R$ 1.250,90" -> 1250.9 | "1250" -> 1250 | "1,250.90" -> 1250.9 | "" ou "abc" -> 0
+ * Regra: se houver vírgula e ponto, o separador que aparece por último é o decimal.
+ * Se houver só vírgula, ela é decimal.
+ * Se houver só ponto com exatamente 3 dígitos depois (ex.: "1.250"), trate como milhar.
+ */
+export function parseBRL(input: string): number {
+  if (!input) return 0;
+  let clean = input.replace(/[^\d.,]/g, '').trim();
+  if (!clean) return 0;
+
+  const hasComma = clean.includes(',');
+  const hasDot = clean.includes('.');
+
+  if (hasComma && hasDot) {
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // Padrão brasileiro: "1.250,90" -> remove pontos e troca vírgula por ponto
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Padrão americano: "1,250.90" -> remove vírgulas
+      clean = clean.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    // Apenas vírgula: "675,80" -> decimal
+    const lastComma = clean.lastIndexOf(',');
+    const before = clean.slice(0, lastComma).replace(/,/g, '');
+    const after = clean.slice(lastComma + 1);
+    clean = `${before}.${after}`;
+  } else if (hasDot) {
+    // Apenas ponto:
+    // Se houver só ponto com exatamente 3 dígitos depois (ex.: "1.250"), trate como milhar.
+    const lastDot = clean.lastIndexOf('.');
+    const digitsAfterDot = clean.slice(lastDot + 1);
+    if (digitsAfterDot.length === 3) {
+      clean = clean.replace(/\./g, '');
+    }
+  }
+
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Formata um objeto Date para string no formato de input local "yyyy-MM-ddTHH:mm"
+ */
+export function toLocalDateTimeInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * Calcula a posição no ranking e pontos acumulados de um personal para o mês (horário local)
+ * da data de referência, considerando apenas personais ativos.
+ */
+export function computeMonthStanding(
+  sales: Sale[],
+  personais: Personal[],
+  personalId: string,
+  referenceDate: Date | string
+): { rank: number; monthPoints: number } {
+  const ref = typeof referenceDate === 'string' ? new Date(referenceDate) : referenceDate;
+  const targetMonth = ref.getMonth();
+  const targetYear = ref.getFullYear();
+
+  // Apenas personais ativos
+  const activePersonais = personais.filter((p) => p.active);
+
+  const statsMap = new Map<string, { points: number; volume: number }>();
+  activePersonais.forEach((p) => {
+    statsMap.set(p.id, { points: 0, volume: 0 });
+  });
+
+  sales.forEach((s) => {
+    if (!statsMap.has(s.personalId)) return;
+    const sDate = new Date(s.timestamp);
+    if (sDate.getMonth() === targetMonth && sDate.getFullYear() === targetYear) {
+      const curr = statsMap.get(s.personalId)!;
+      curr.points += s.pointsAdded;
+      curr.volume += s.value;
+    }
+  });
+
+  const sorted = activePersonais
+    .map((p) => ({
+      id: p.id,
+      points: statsMap.get(p.id)?.points || 0,
+      volume: statsMap.get(p.id)?.volume || 0
+    }))
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      return b.volume - a.volume;
+    });
+
+  const rankIndex = sorted.findIndex((item) => item.id === personalId);
+  const rank = rankIndex >= 0 ? rankIndex + 1 : (activePersonais.length > 0 ? activePersonais.length : 1);
+  const monthPoints = statsMap.get(personalId)?.points || 0;
+
+  return { rank, monthPoints };
+}
+
+/**
  * Prepara a mensagem do WhatsApp substituindo as variáveis dinâmicas
  */
 export function buildWhatsAppMessage({
@@ -139,4 +246,3 @@ export async function sendSaleWebhook({
     };
   }
 }
-

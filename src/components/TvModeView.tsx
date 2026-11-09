@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Tv, Building2, Trophy, Clock, X } from 'lucide-react';
+import { Building2, X, Trophy } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 
@@ -30,29 +30,29 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
 
+    const activePersonais = personais.filter((p) => p.active);
     const map = new Map<string, { salesCount: number; totalVolume: number; points: number }>();
-    personais.forEach((p) => map.set(p.id, { salesCount: 0, totalVolume: 0, points: 0 }));
+    activePersonais.forEach((p) => map.set(p.id, { salesCount: 0, totalVolume: 0, points: 0 }));
 
     monthSales.forEach((s) => {
-      const curr = map.get(s.personalId) || { salesCount: 0, totalVolume: 0, points: 0 };
-      curr.salesCount += 1;
-      curr.totalVolume += s.value;
-      curr.points += s.pointsAdded;
-      map.set(s.personalId, curr);
+      const curr = map.get(s.personalId);
+      if (curr) {
+        curr.salesCount += 1;
+        curr.totalVolume += s.value;
+        curr.points += s.pointsAdded;
+      }
     });
 
-    const entries = personais
-      .filter((p) => p.active)
-      .map((p) => {
-        const stats = map.get(p.id) || { salesCount: 0, totalVolume: 0, points: 0 };
-        return {
-          personal: p,
-          salesCount: stats.salesCount,
-          totalVolume: stats.totalVolume,
-          points: stats.points,
-          rank: 0
-        };
-      });
+    const entries = activePersonais.map((p) => {
+      const stats = map.get(p.id) || { salesCount: 0, totalVolume: 0, points: 0 };
+      return {
+        personal: p,
+        salesCount: stats.salesCount,
+        totalVolume: stats.totalVolume,
+        points: stats.points,
+        rank: 0
+      };
+    });
 
     entries.sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
@@ -111,156 +111,174 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
         </div>
       </header>
 
-      {/* PODIUM TOP 3 NA TV */}
-      <div className="grid grid-cols-3 gap-6 my-6 items-end shrink-0 max-w-6xl mx-auto w-full">
-        
-        {/* 2º Colocado */}
-        {secondPlace && (
-          <div className="bg-[#16171B] border border-white/[0.1] rounded-2xl p-6 flex flex-col justify-between h-[280px] shadow-xl">
-            <div className="flex justify-between items-start">
-              <span className="font-mono text-4xl font-extrabold text-zinc-500">02</span>
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
-                <img
-                  src={secondPlace.personal.avatarUrl}
-                  alt={secondPlace.personal.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-mono uppercase text-zinc-400">2º Lugar</span>
-              <h2 className="text-xl font-bold truncate mt-0.5">{secondPlace.personal.name}</h2>
-              <span className="text-xs text-zinc-400 truncate block">{secondPlace.personal.gym}</span>
-            </div>
-            <div className="pt-3 border-t border-white/[0.08] flex justify-between items-center">
-              <span className="text-xs font-mono text-zinc-400">Pontos</span>
-              <span className="text-xl font-mono font-bold text-white">
-                {secondPlace.points.toLocaleString('pt-BR')} <span className="text-xs text-zinc-500 font-normal">pts</span>
-              </span>
-            </div>
+      {/* ESTADO VAZIO NA TV */}
+      {leaderboard.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-[#F5A623]/10 border border-[#F5A623]/30 text-[#F5A623] flex items-center justify-center">
+            <Trophy className="w-8 h-8" />
           </div>
-        )}
-
-        {/* 1º Colocado (Destaque Central) */}
-        {firstPlace && (
-          <div className="bg-[#1A1B22] border-2 border-[#F5A623] rounded-3xl p-8 flex flex-col justify-between h-[330px] shadow-2xl shadow-[#F5A623]/20 relative overflow-hidden">
-            <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#F5A623]/20 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="font-mono text-5xl font-black text-[#F5A623]">01</span>
-                <span className="block text-[11px] font-mono uppercase bg-[#F5A623] text-black font-extrabold px-2 py-0.5 rounded mt-1">
-                  LÍDER DO MÊS
-                </span>
-              </div>
-              <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#F5A623] shadow-lg">
-                <img
-                  src={firstPlace.personal.avatarUrl}
-                  alt={firstPlace.personal.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-black tracking-tight truncate">{firstPlace.personal.name}</h2>
-              <div className="text-sm text-zinc-300 flex items-center gap-2 mt-1">
-                <Building2 className="w-4 h-4 text-[#F5A623]" />
-                <span className="truncate">{firstPlace.personal.gym}</span>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-white/[0.12] flex justify-between items-center">
-              <div>
-                <span className="text-xs font-mono text-zinc-400 uppercase block">Volume Total</span>
-                <span className="text-sm font-bold text-[#F5A623] font-mono">
-                  {formatCurrencyBRL(firstPlace.totalVolume)}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-mono text-zinc-400 uppercase block">Pontos</span>
-                <span className="text-2xl font-mono font-black text-white">
-                  {firstPlace.points.toLocaleString('pt-BR')} <span className="text-sm text-[#F5A623] font-bold">pts</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3º Colocado */}
-        {thirdPlace && (
-          <div className="bg-[#16171B] border border-white/[0.1] rounded-2xl p-6 flex flex-col justify-between h-[260px] shadow-xl">
-            <div className="flex justify-between items-start">
-              <span className="font-mono text-4xl font-extrabold text-zinc-600">03</span>
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
-                <img
-                  src={thirdPlace.personal.avatarUrl}
-                  alt={thirdPlace.personal.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-mono uppercase text-zinc-400">3º Lugar</span>
-              <h2 className="text-xl font-bold truncate mt-0.5">{thirdPlace.personal.name}</h2>
-              <span className="text-xs text-zinc-400 truncate block">{thirdPlace.personal.gym}</span>
-            </div>
-            <div className="pt-3 border-t border-white/[0.08] flex justify-between items-center">
-              <span className="text-xs font-mono text-zinc-400">Pontos</span>
-              <span className="text-xl font-mono font-bold text-white">
-                {thirdPlace.points.toLocaleString('pt-BR')} <span className="text-xs text-zinc-500 font-normal">pts</span>
-              </span>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* TABELA COMPLETA */}
-      <div className="flex-1 overflow-auto max-w-6xl mx-auto w-full bg-[#16171B] border border-white/[0.08] rounded-2xl shadow-xl">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-white/[0.08] bg-[#121316] text-xs font-mono uppercase tracking-wider text-zinc-400">
-              <th className="py-3 px-6 w-20 text-center">Pos</th>
-              <th className="py-3 px-6">Personal Partner</th>
-              <th className="py-3 px-6">Academia / Studio</th>
-              <th className="py-3 px-6 text-center">Vendas</th>
-              <th className="py-3 px-6 text-right">Volume</th>
-              <th className="py-3 px-6 text-right">Pontuação</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.05]">
-            {leaderboard.map((item) => (
-              <tr key={item.personal.id} className="hover:bg-white/[0.02]">
-                <td className="py-3.5 px-6 text-center font-mono font-bold text-base">
-                  <span
-                    className={`inline-block w-8 py-0.5 rounded ${
-                      item.rank === 1
-                        ? 'bg-[#F5A623] text-black font-extrabold'
-                        : item.rank === 2
-                        ? 'bg-zinc-700 text-white'
-                        : item.rank === 3
-                        ? 'bg-zinc-800 text-zinc-300'
-                        : 'text-zinc-500'
-                    }`}
-                  >
-                    {String(item.rank).padStart(2, '0')}
+          <h2 className="text-2xl font-bold text-white">Nenhum personal ativo no ranking deste mês</h2>
+          <p className="text-sm text-zinc-400 max-w-md">
+            As vendas lançadas no balcão da New Fit Suplementos aparecerão aqui em tempo real.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* PODIUM TOP 3 NA TV */}
+          <div className="grid grid-cols-3 gap-6 my-6 items-end shrink-0 max-w-6xl mx-auto w-full">
+            
+            {/* 2º Colocado */}
+            {secondPlace ? (
+              <div className="bg-[#16171B] border border-white/[0.1] rounded-2xl p-6 flex flex-col justify-between h-[280px] shadow-xl">
+                <div className="flex justify-between items-start">
+                  <span className="font-mono text-4xl font-extrabold text-zinc-500">02</span>
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
+                    <img
+                      src={secondPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${secondPlace.personal.name}`}
+                      alt={secondPlace.personal.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs font-mono uppercase text-zinc-400">2º Lugar</span>
+                  <h2 className="text-xl font-bold truncate mt-0.5">{secondPlace.personal.name}</h2>
+                  <span className="text-xs text-zinc-400 truncate block">{secondPlace.personal.gym}</span>
+                </div>
+                <div className="pt-3 border-t border-white/[0.08] flex justify-between items-center">
+                  <span className="text-xs font-mono text-zinc-400">Pontos</span>
+                  <span className="text-xl font-mono font-bold text-white">
+                    {secondPlace.points.toLocaleString('pt-BR')} <span className="text-xs text-zinc-500 font-normal">pts</span>
                   </span>
-                </td>
-                <td className="py-3.5 px-6 font-bold text-white">{item.personal.name}</td>
-                <td className="py-3.5 px-6 text-zinc-400">{item.personal.gym}</td>
-                <td className="py-3.5 px-6 text-center font-mono text-zinc-300">{item.salesCount}</td>
-                <td className="py-3.5 px-6 text-right font-mono text-zinc-300">{formatCurrencyBRL(item.totalVolume)}</td>
-                <td className="py-3.5 px-6 text-right font-mono font-bold text-base text-[#F5A623]">
-                  {item.points.toLocaleString('pt-BR')} pts
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </div>
+            ) : (
+              <div />
+            )}
+
+            {/* 1º Colocado (Destaque Central) */}
+            {firstPlace && (
+              <div className="bg-[#1A1B22] border-2 border-[#F5A623] rounded-3xl p-8 flex flex-col justify-between h-[330px] shadow-2xl shadow-[#F5A623]/20 relative overflow-hidden">
+                <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#F5A623]/20 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-mono text-5xl font-black text-[#F5A623]">01</span>
+                    <span className="block text-[11px] font-mono uppercase bg-[#F5A623] text-black font-extrabold px-2 py-0.5 rounded mt-1">
+                      LÍDER DO MÊS
+                    </span>
+                  </div>
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#F5A623] shadow-lg">
+                    <img
+                      src={firstPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${firstPlace.personal.name}`}
+                      alt={firstPlace.personal.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight truncate">{firstPlace.personal.name}</h2>
+                  <div className="text-sm text-zinc-300 flex items-center gap-2 mt-1">
+                    <Building2 className="w-4 h-4 text-[#F5A623]" />
+                    <span className="truncate">{firstPlace.personal.gym}</span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/[0.12] flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-mono text-zinc-400 uppercase block">Volume Total</span>
+                    <span className="text-sm font-bold text-[#F5A623] font-mono">
+                      {formatCurrencyBRL(firstPlace.totalVolume)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono text-zinc-400 uppercase block">Pontos</span>
+                    <span className="text-2xl font-mono font-black text-white">
+                      {firstPlace.points.toLocaleString('pt-BR')} <span className="text-sm text-[#F5A623] font-bold">pts</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3º Colocado */}
+            {thirdPlace ? (
+              <div className="bg-[#16171B] border border-white/[0.1] rounded-2xl p-6 flex flex-col justify-between h-[260px] shadow-xl">
+                <div className="flex justify-between items-start">
+                  <span className="font-mono text-4xl font-extrabold text-zinc-600">03</span>
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
+                    <img
+                      src={thirdPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${thirdPlace.personal.name}`}
+                      alt={thirdPlace.personal.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs font-mono uppercase text-zinc-400">3º Lugar</span>
+                  <h2 className="text-xl font-bold truncate mt-0.5">{thirdPlace.personal.name}</h2>
+                  <span className="text-xs text-zinc-400 truncate block">{thirdPlace.personal.gym}</span>
+                </div>
+                <div className="pt-3 border-t border-white/[0.08] flex justify-between items-center">
+                  <span className="text-xs font-mono text-zinc-400">Pontos</span>
+                  <span className="text-xl font-mono font-bold text-white">
+                    {thirdPlace.points.toLocaleString('pt-BR')} <span className="text-xs text-zinc-500 font-normal">pts</span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div />
+            )}
+
+          </div>
+
+          {/* TABELA COMPLETA */}
+          <div className="flex-1 overflow-auto max-w-6xl mx-auto w-full bg-[#16171B] border border-white/[0.08] rounded-2xl shadow-xl mb-4">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-white/[0.08] bg-[#121316] text-xs font-mono uppercase tracking-wider text-zinc-400">
+                  <th className="py-3 px-6 w-20 text-center">Pos</th>
+                  <th className="py-3 px-6">Personal Partner</th>
+                  <th className="py-3 px-6">Academia / Studio</th>
+                  <th className="py-3 px-6 text-center">Vendas</th>
+                  <th className="py-3 px-6 text-right">Volume</th>
+                  <th className="py-3 px-6 text-right">Pontuação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.05]">
+                {leaderboard.map((item) => (
+                  <tr key={item.personal.id} className="hover:bg-white/[0.02]">
+                    <td className="py-3.5 px-6 text-center font-mono font-bold text-base">
+                      <span
+                        className={`inline-block w-8 py-0.5 rounded ${
+                          item.rank === 1
+                            ? 'bg-[#F5A623] text-black font-extrabold'
+                            : item.rank === 2
+                            ? 'bg-zinc-700 text-white'
+                            : item.rank === 3
+                            ? 'bg-zinc-800 text-zinc-300'
+                            : 'text-zinc-500'
+                        }`}
+                      >
+                        {String(item.rank).padStart(2, '0')}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-6 font-bold text-white">{item.personal.name}</td>
+                    <td className="py-3.5 px-6 text-zinc-400">{item.personal.gym}</td>
+                    <td className="py-3.5 px-6 text-center font-mono text-zinc-300">{item.salesCount}</td>
+                    <td className="py-3.5 px-6 text-right font-mono text-zinc-300">{formatCurrencyBRL(item.totalVolume)}</td>
+                    <td className="py-3.5 px-6 text-right font-mono font-bold text-base text-[#F5A623]">
+                      {item.points.toLocaleString('pt-BR')} pts
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
     </div>
   );
 };
-
