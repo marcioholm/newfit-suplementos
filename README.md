@@ -137,6 +137,9 @@ Três fluxos no n8n (arquivos em [`n8n/`](n8n/)):
 | `newfit-dados-workflow.json` | `GET /webhook/newfit-dados` | Devolve personais e vendas públicos para o portal, o Ranking e o Modo TV |
 
 - Os endereços de personais e dados são derivados da URL de vendas (troca o último trecho). Para usar outros, defina `VITE_N8N_PERSONAIS_URL` e `VITE_N8N_DADOS_URL`.
+- A aba **Personais** da planilha é a fonte dos cadastros: qualquer aparelho baixa os personais de lá (Balcão e Personais funcionam num navegador novo). O telefone não sai da planilha; o fluxo de vendas busca o número pelo ID do personal na hora de mandar o WhatsApp.
+- Alteração que falhou ao subir fica marcada como pendente e não é desfeita pela planilha até ser reenviada.
+- Use sempre o domínio fixo de produção: cada endereço da Vercel é um "site" diferente para o navegador (dados e CORS separados).
 - Cadastrar, trocar foto ou ativar/desativar um personal envia o cadastro na hora. Em **Personais → Enviar personais ao portal** dá para subir todos os cadastros do aparelho.
 - O Ranking, o Modo TV e o portal usam os dados da planilha quando disponíveis (atualização a cada 60 s; 30 s no Modo TV) e guardam a última resposta para abrir sem internet. Sem dados da planilha, usam os deste aparelho.
 - Nos três webhooks, configure **Allowed Origins (CORS)** com o domínio da Vercel.

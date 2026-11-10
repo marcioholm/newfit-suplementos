@@ -10,6 +10,8 @@ export interface Personal {
   avatarUrl?: string;
   active: boolean;
   createdAt: string;
+  /** Alteração local que ainda não chegou à planilha (não é sobrescrita por ela) */
+  pendingSync?: boolean;
 }
 
 export interface Sale {

@@ -357,6 +357,11 @@ export function App() {
   // Envia o cadastro para a planilha (portal e ranking de outros aparelhos)
   const pushPersonais = async (list: Personal[], { silent = true } = {}) => {
     const res = await syncPersonais(personaisSyncUrl(settings.webhookUrl), list);
+    const ids = new Set(list.map((p) => p.id));
+    // Falhou: marca como pendente para a planilha não sobrescrever a alteração local
+    setPersonais((prev) =>
+      prev.map((p) => (ids.has(p.id) ? { ...p, pendingSync: res.success ? undefined : true } : p))
+    );
     if (!res.success) {
       toast.show({
         kind: 'error',
@@ -417,6 +422,49 @@ export function App() {
   const rankingSource = shared
     ? `Atualizado às ${new Date(shared.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
     : 'Dados deste aparelho';
+
+  // A planilha é a fonte dos personais: traz os que faltam neste aparelho e atualiza os demais.
+  // O telefone só existe localmente (a planilha não o expõe); alterações pendentes não são sobrescritas.
+  useEffect(() => {
+    const remoteList = remote.data?.personais;
+    if (!remoteList || remoteList.length === 0) return;
+    setPersonais((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      let changed = false;
+      const merged = prev.map((local) => {
+        const r = remoteList.find((x) => x.id === local.id);
+        if (!r || local.pendingSync) return local;
+        const next: Personal = {
+          ...local,
+          name: r.name,
+          firstName: r.firstName,
+          gym: r.gym,
+          code: r.code,
+          active: r.active,
+          avatarUrl: r.avatarUrl
+        };
+        if (
+          next.name !== local.name ||
+          next.firstName !== local.firstName ||
+          next.gym !== local.gym ||
+          next.code !== local.code ||
+          next.active !== local.active ||
+          next.avatarUrl !== local.avatarUrl
+        ) {
+          changed = true;
+          return next;
+        }
+        return local;
+      });
+      for (const r of remoteList) {
+        if (!byId.has(r.id)) {
+          merged.push({ ...r, phone: '', createdAt: r.createdAt || new Date().toISOString() });
+          changed = true;
+        }
+      }
+      return changed ? merged : prev;
+    });
+  }, [remote.data]);
 
   // Nunca renderiza área protegida sem PIN, nem por um quadro
   const visibleTab: TabId = isUnlocked ? activeTab : 'ranking';
