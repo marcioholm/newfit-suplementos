@@ -386,10 +386,13 @@ export function App() {
     pushPersonais([newPersonal]);
   };
 
-  // 6b. ACTION: UPDATE PERSONAL (ex.: trocar foto)
+  // 6b. ACTION: UPDATE PERSONAL (ex.: trocar foto, corrigir nome)
   const handleUpdatePersonal = (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => {
     const current = personais.find((p) => p.id === id);
     setPersonais((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes } : p)));
+    if (changes.name) {
+      setSales((prev) => prev.map((s) => (s.personalId === id ? { ...s, personalName: changes.name! } : s)));
+    }
     if (current) pushPersonais([{ ...current, ...changes }]);
   };
 

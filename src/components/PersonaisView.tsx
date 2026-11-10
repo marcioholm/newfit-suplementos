@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { CloudUpload, Copy, Eye, Loader2, Lock, MessageCircle, Plus, Share, Users } from 'lucide-react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { CloudUpload, Copy, Eye, Loader2, Lock, MessageCircle, Pencil, Plus, Share, Users } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import { resizeImageToAvatar, avatarSrc } from '../services/imageService';
@@ -146,6 +146,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
   const pendingSync = syncedIds ? personais.filter((p) => !syncedIds.has(p.id)).length : null;
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingPersonal, setEditingPersonal] = useState<Personal | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const detail = personais.find((p) => p.id === detailId) || null;
 
@@ -327,13 +328,25 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
       )}
 
       {/* Ficha do personal */}
-      <Sheet open={!!detail} onClose={() => setDetailId(null)} title="Personal">
+      <Sheet
+        open={!!detail}
+        onClose={() => setDetailId(null)}
+        title="Personal"
+        trailing={
+          detail ? (
+            <SheetAction onClick={() => setEditingPersonal(detail)}>
+              Editar
+            </SheetAction>
+          ) : undefined
+        }
+      >
         {detail && (
           <PersonalDetail
             personal={detail}
             stats={statsFor(detail.id)}
             rank={detail.active ? rankOf(detail.id) : null}
             onPhoto={(avatarUrl) => onUpdatePersonal(detail.id, { avatarUrl })}
+            onEdit={() => setEditingPersonal(detail)}
             onCopy={copy}
             onOpenPortal={onOpenPortal}
             onToggleActive={() => {
@@ -359,6 +372,18 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
           toast.show({ kind: 'success', title: `${p.firstName} cadastrado` });
         }}
       />
+
+      {/* Edição */}
+      <EditPersonalSheet
+        personal={editingPersonal}
+        onClose={() => setEditingPersonal(null)}
+        existingCodes={personais.map((p) => p.code.toUpperCase())}
+        onSave={(id, changes) => {
+          onUpdatePersonal(id, changes);
+          setEditingPersonal(null);
+          toast.show({ kind: 'success', title: 'Personal atualizado' });
+        }}
+      />
     </div>
   );
 };
@@ -370,18 +395,25 @@ const PersonalDetail: React.FC<{
   stats: { count: number; volume: number; points: number; pSales: Sale[] };
   rank: number | null;
   onPhoto: (url: string | undefined) => void;
+  onEdit: () => void;
   onCopy: (text: string, what: string) => void;
   onOpenPortal?: (code?: string) => void;
   onToggleActive: () => void;
-}> = ({ personal, stats, rank, onPhoto, onCopy, onOpenPortal, onToggleActive }) => (
+}> = ({ personal, stats, rank, onPhoto, onEdit, onCopy, onOpenPortal, onToggleActive }) => (
   <div className="pt-2">
     <PhotoPicker name={personal.name} value={personal.avatarUrl} onChange={onPhoto} />
-    <div className="text-center mt-2 mb-5">
+    <div className="text-center mt-2 mb-3">
       <h3 className="type-title-2 text-label">{personal.name}</h3>
       <p className="type-subhead text-label-2">
         {personal.gym}
         {rank ? ` · ${rank}º no ranking` : !personal.active ? ' · Inativo' : ''}
       </p>
+    </div>
+
+    <div className="flex items-center justify-center gap-2 mb-5">
+      <Button variant="tinted" size="sm" icon={<Pencil className="w-3.5 h-3.5" />} onClick={onEdit}>
+        Editar dados
+      </Button>
     </div>
 
     <div className="grid grid-cols-3 gap-2 mb-6">
@@ -631,6 +663,142 @@ const AddPersonalSheet: React.FC<{
           Salvar
         </button>
       </form>
+    </Sheet>
+  );
+};
+
+/* ───────────────────────────── Edição ───────────────────────────── */
+
+const EditPersonalSheet: React.FC<{
+  personal: Personal | null;
+  onClose: () => void;
+  existingCodes: string[];
+  onSave: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
+}> = ({ personal, onClose, existingCodes, onSave }) => {
+  const [name, setName] = useState('');
+  const [gym, setGym] = useState('');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [photo, setPhoto] = useState<string | undefined>();
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (personal) {
+      setName(personal.name);
+      setGym(personal.gym);
+      setPhone(formatPhone(personal.phone));
+      setCode(personal.code);
+      setPhoto(personal.avatarUrl);
+      setPhoneError(null);
+    }
+  }, [personal]);
+
+  const finalCode = code.trim().toUpperCase();
+  const otherCodes = personal ? existingCodes.filter((c) => c !== personal.code.toUpperCase()) : existingCodes;
+  const codeTaken = !!finalCode && otherCodes.includes(finalCode);
+  const valid = !!personal && !!name.trim() && !!gym.trim() && !!phone.trim() && !!finalCode && !codeTaken;
+
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!personal) return;
+    const { phone: normalized, error } = normalizePhone(phone);
+    if (error) {
+      setPhoneError(error);
+      return;
+    }
+    if (!valid || !normalized) return;
+
+    onSave(personal.id, {
+      name: name.trim(),
+      firstName: name.trim().split(' ')[0],
+      gym: gym.trim(),
+      phone: normalized,
+      code: finalCode,
+      avatarUrl: photo
+    });
+  };
+
+  return (
+    <Sheet
+      open={!!personal}
+      onClose={onClose}
+      title="Editar personal"
+      leading={<SheetAction onClick={onClose}>Cancelar</SheetAction>}
+      trailing={
+        <SheetAction emphasized disabled={!valid} onClick={() => submit()}>
+          Salvar
+        </SheetAction>
+      }
+    >
+      {personal && (
+        <form onSubmit={submit} className="pt-3" aria-label="Editar personal">
+          <div className="mb-6">
+            <PhotoPicker name={name} value={photo} onChange={setPhoto} />
+          </div>
+          <Section footer="Corrija o nome, academia, telefone ou cupom do personal.">
+            <Group>
+              <FieldRow label="Nome" htmlFor="edit-p-name">
+                <BareInput
+                  id="edit-p-name"
+                  data-autofocus
+                  placeholder="Nome completo"
+                  autoCapitalize="words"
+                  autoComplete="off"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </FieldRow>
+              <FieldRow label="Academia" htmlFor="edit-p-gym">
+                <BareInput
+                  id="edit-p-gym"
+                  placeholder="Academia ou studio"
+                  autoCapitalize="words"
+                  value={gym}
+                  onChange={(e) => setGym(e.target.value)}
+                  required
+                />
+              </FieldRow>
+              <FieldRow label="WhatsApp" htmlFor="edit-p-phone" error={phoneError}>
+                <BareInput
+                  id="edit-p-phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="(43) 99821-3344"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (phoneError) setPhoneError(null);
+                  }}
+                  onBlur={() => phone.trim() && setPhoneError(normalizePhone(phone).error ?? null)}
+                  aria-invalid={!!phoneError}
+                  className="tabular-nums"
+                  required
+                />
+              </FieldRow>
+              <FieldRow
+                label="Cupom"
+                htmlFor="edit-p-code"
+                error={codeTaken ? 'Este cupom já é de outro personal.' : null}
+              >
+                <BareInput
+                  id="edit-p-code"
+                  placeholder="ANA10"
+                  autoCapitalize="characters"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  className="font-semibold tracking-[0.04em] uppercase"
+                  required
+                />
+              </FieldRow>
+            </Group>
+          </Section>
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden disabled={!valid}>
+            Salvar
+          </button>
+        </form>
+      )}
     </Sheet>
   );
 };
