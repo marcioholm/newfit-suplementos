@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   UserPlus, 
   Building2, 
@@ -15,23 +15,120 @@ import {
   ArrowUpRight,
   TrendingUp,
   X,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
+import { resizeImageToAvatar, avatarSrc } from '../services/imageService';
+
+/**
+ * Seletor de foto: no celular abre câmera ou galeria; recorta e comprime a imagem.
+ */
+const PhotoPicker: React.FC<{
+  name: string;
+  value?: string;
+  onChange: (dataUrl: string | undefined) => void;
+  size?: 'md' | 'lg';
+}> = ({ name, value, onChange, size = 'lg' }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (file?: File) => {
+    if (!file) return;
+    setError(null);
+    setIsProcessing(true);
+    try {
+      onChange(await resizeImageToAvatar(file));
+    } catch (e: any) {
+      setError(e?.message || 'Não foi possível usar esta foto.');
+    } finally {
+      setIsProcessing(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const box = size === 'lg' ? 'w-20 h-20' : 'w-14 h-14';
+
+  return (
+    <div className="flex items-center gap-4">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className={`${box} rounded-2xl overflow-hidden border-2 border-dashed border-white/[0.18] hover:border-[#F5A623] bg-[#0D0E11] shrink-0 relative group transition`}
+        aria-label={value ? 'Trocar foto' : 'Adicionar foto'}
+      >
+        {value ? (
+          <img src={value} alt={name || 'Foto do personal'} className="w-full h-full object-cover" />
+        ) : (
+          <span className="w-full h-full flex flex-col items-center justify-center text-zinc-500 group-hover:text-[#F5A623]">
+            <Camera className="w-5 h-5" />
+            <span className="text-[9px] font-semibold mt-1 uppercase tracking-wider">Foto</span>
+          </span>
+        )}
+        {isProcessing && (
+          <span className="absolute inset-0 bg-black/70 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-[#F5A623] animate-spin" />
+          </span>
+        )}
+      </button>
+
+      <div className="space-y-1.5 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={isProcessing}
+            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold border border-white/[0.1] transition flex items-center gap-1.5"
+          >
+            <Camera className="w-3.5 h-3.5 text-[#F5A623]" />
+            <span>{value ? 'Trocar foto' : 'Adicionar foto'}</span>
+          </button>
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              disabled={isProcessing}
+              className="px-2.5 py-1.5 text-zinc-400 hover:text-red-400 rounded-lg text-[11px] font-semibold transition flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remover</span>
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-zinc-500">
+          {error ? <span className="text-red-400">{error}</span> : 'Opcional. Aparece no ranking e no Modo TV.'}
+        </p>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
+    </div>
+  );
+};
 
 interface PersonaisViewProps {
   personais: Personal[];
   sales: Sale[];
   onAddPersonal: (personal: Omit<Personal, 'id' | 'createdAt'>) => void;
   onToggleActive: (id: string) => void;
+  onUpdatePersonal: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
 }
 
 export const PersonaisView: React.FC<PersonaisViewProps> = ({
   personais,
   sales,
   onAddPersonal,
-  onToggleActive
+  onToggleActive,
+  onUpdatePersonal
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,6 +140,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
   const [gym, setGym] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   // Auto-generate cupom when typing name
@@ -82,10 +180,11 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
       phone: cleanPhone,
       code: (code.trim() || firstName.toUpperCase() + '10').toUpperCase(),
       active: true,
-      avatarUrl: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 500)}?w=200&auto=format&fit=crop&q=80`
+      avatarUrl: photo
     });
 
     setName('');
+    setPhoto(undefined);
     setGym('');
     setPhone('');
     setCode('');
@@ -204,10 +303,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/[0.1] bg-zinc-800 shrink-0 relative">
                       <img
-                        src={
-                          personal.avatarUrl ||
-                          `https://api.dicebear.com/7.x/initials/svg?seed=${personal.name}`
-                        }
+                        src={avatarSrc(personal)}
                         alt={personal.name}
                         className="w-full h-full object-cover"
                       />
@@ -302,7 +398,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
               <div className="flex items-center gap-3.5">
                 <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-[#F5A623] bg-zinc-800 shrink-0">
                   <img
-                    src={selectedPersonalDetail.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${selectedPersonalDetail.name}`}
+                    src={avatarSrc(selectedPersonalDetail)}
                     alt={selectedPersonalDetail.name}
                     className="w-full h-full object-cover"
                   />
@@ -330,6 +426,20 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Foto do personal */}
+            <div className="bg-[#121316] border border-white/[0.08] rounded-2xl p-4 space-y-2">
+              <span className="text-[10px] font-mono uppercase text-zinc-400 block">Foto do Personal</span>
+              <PhotoPicker
+                name={selectedPersonalDetail.name}
+                value={selectedPersonalDetail.avatarUrl}
+                size="md"
+                onChange={(dataUrl) => {
+                  onUpdatePersonal(selectedPersonalDetail.id, { avatarUrl: dataUrl });
+                  setSelectedPersonalDetail({ ...selectedPersonalDetail, avatarUrl: dataUrl });
+                }}
+              />
             </div>
 
             {/* Cupom & Compartilhamento */}
@@ -406,7 +516,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
       {/* Modal de Cadastro de Novo Personal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#16171B] border border-white/[0.12] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-[#16171B] border border-white/[0.12] rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
@@ -414,7 +524,10 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
                 <span>Cadastrar Personal Parceiro</span>
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setPhoto(undefined);
+                }}
                 className="text-zinc-500 hover:text-white text-sm font-mono"
               >
                 ✕
@@ -422,6 +535,8 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+              <PhotoPicker name={name} value={photo} onChange={setPhoto} />
+
               <div className="space-y-1">
                 <label className="text-zinc-300 font-semibold uppercase tracking-wider text-[11px]">
                   Nome Completo
@@ -491,7 +606,10 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
               <div className="pt-4 border-t border-white/[0.08] flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setPhoto(undefined);
+                  }}
                   className="px-3.5 py-2 rounded-xl border border-white/[0.08] text-zinc-300 hover:bg-zinc-800 transition"
                 >
                   Cancelar
