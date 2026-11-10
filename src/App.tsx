@@ -18,6 +18,7 @@ import { PersonaisView } from './components/PersonaisView';
 import { WebhookSettingsView } from './components/WebhookSettingsView';
 import { TvModeView } from './components/TvModeView';
 import { PinModal } from './components/PinModal';
+import { PersonalPortalView } from './components/PersonalPortalView';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
@@ -89,7 +90,52 @@ if (typeof window !== 'undefined') {
   }
 }
 
+function getPortalFromURL() {
+  if (typeof window === 'undefined') return { isPortal: false, code: '' };
+  const params = new URLSearchParams(window.location.search);
+  const isPortal = params.get('portal') === 'personal' || params.get('view') === 'personal' || window.location.hash === '#/personal';
+  const code = params.get('code') || '';
+  return { isPortal, code };
+}
+
 export function App() {
+  // 0. THEME STATE (LIGHT / DARK)
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('newfit_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+    }
+    return 'dark';
+  });
+
+  // Portal do Personal (visualização separada sem dados confidenciais do balcão)
+  const [portalState, setPortalState] = useState(getPortalFromURL);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPortalState(getPortalFromURL());
+    };
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('newfit_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // 1. PERSISTENT STATE (LOCALSTORAGE)
   const [personais, setPersonais] = useState<Personal[]>(() =>
     readJSON<Personal[]>('newfit_personais', INITIAL_PERSONAIS)
@@ -310,8 +356,31 @@ export function App() {
     handleNavigateToTab('balcao');
   };
 
+  // Se estiver no link do portal dos personais, renderiza a visualização exclusiva
+  if (portalState.isPortal) {
+    return (
+      <PersonalPortalView
+        personais={personais}
+        sales={sales}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        initialCode={portalState.code}
+        onExitPortal={() => {
+          if (typeof window !== 'undefined' && window.history.pushState) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('portal');
+            url.searchParams.delete('view');
+            url.searchParams.delete('code');
+            window.history.pushState({}, '', url.pathname);
+          }
+          setPortalState({ isPortal: false, code: '' });
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#090A0C] text-zinc-100 antialiased selection:bg-[#F5A623] selection:text-black">
+    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-[#090A0C] text-zinc-900 dark:text-zinc-100 antialiased selection:bg-[#F5A623] selection:text-black transition-colors duration-150">
       
       {/* NAVBAR PRINCIPAL */}
       <Navbar
@@ -320,6 +389,14 @@ export function App() {
         onOpenTvMode={() => {
           setIsUnlocked(false);
           setIsTvMode(true);
+        }}
+        onOpenPersonalPortal={() => {
+          if (typeof window !== 'undefined' && window.history.pushState) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('portal', 'personal');
+            window.history.pushState({}, '', url.toString());
+          }
+          setPortalState({ isPortal: true, code: '' });
         }}
         isUnlocked={isUnlocked}
         onLockClick={() => {
@@ -331,6 +408,8 @@ export function App() {
           }
         }}
         currentMonthSalesTotal={sales.length}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}

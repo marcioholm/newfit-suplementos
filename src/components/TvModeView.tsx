@@ -3,6 +3,7 @@ import { Building2, X, Trophy } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { avatarSrc } from '../services/imageService';
 import { formatCurrencyBRL } from '../services/webhookService';
+import { NewFitLogo } from './NewFitLogo';
 
 interface TvModeViewProps {
   personais: Personal[];
@@ -77,9 +78,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
       {/* TV HEADER */}
       <header className="flex items-center justify-between border-b border-white/[0.1] pb-6 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#F5A623] text-black font-extrabold flex items-center justify-center text-xl shadow-lg shadow-[#F5A623]/25 tracking-wider">
-            NF
-          </div>
+          <NewFitLogo theme="dark" size="lg" showText={false} />
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
               <span>NEW FIT</span>

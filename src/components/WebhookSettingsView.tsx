@@ -104,12 +104,12 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8 animate-in fade-in duration-200">
       
       {/* Header */}
-      <div className="border-b border-white/[0.08] pb-5">
-        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+      <div className="border-b border-zinc-200/80 dark:border-white/[0.08] pb-5">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2.5">
           <Webhook className="w-6 h-6 text-[#F5A623]" />
           <span>Configuração da Automação (n8n & WhatsApp)</span>
         </h2>
-        <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+        <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
           Integração HTTP POST com fluxo n8n para inserção no Google Sheets e disparo via Evolution API
         </p>
       </div>
@@ -120,12 +120,12 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
         <div className="lg:col-span-7 space-y-6">
           
           {/* Card Webhook URL */}
-          <div className="bg-[#16171B] border border-white/[0.08] rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-2">
                 <span>Webhook Endpoint (n8n)</span>
               </label>
-              <span className="text-[10px] font-mono text-zinc-500">HTTP POST • JSON</span>
+              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">HTTP POST • JSON</span>
             </div>
 
             <div className="space-y-2">
@@ -134,9 +134,9 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
                 placeholder="https://seu-n8n.com/webhook/newfit-vendas"
-                className="w-full bg-[#0D0E11] border border-white/[0.12] focus:border-[#F5A623] rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono"
+                className="w-full bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] focus:border-[#F5A623] rounded-xl px-4 py-2.5 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none font-mono"
               />
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 URL do nó de webhook do n8n que recebe o payload com a venda, dados do personal e o texto da mensagem.
               </p>
             </div>
@@ -147,7 +147,7 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
                 type="button"
                 onClick={handleTestPing}
                 disabled={isTesting}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold border border-white/[0.1] transition flex items-center gap-1.5"
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 text-zinc-800 dark:text-white rounded-xl text-xs font-semibold border border-zinc-200 dark:border-white/[0.1] transition flex items-center gap-1.5 shadow-xs"
               >
                 <Send className="w-3.5 h-3.5 text-[#F5A623]" />
                 <span>{isTesting ? 'Disparando Ping...' : 'Testar Conexão (Ping)'}</span>
@@ -156,7 +156,7 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-5 py-2 bg-[#F5A623] hover:bg-[#e5971a] text-black rounded-xl text-xs font-bold transition shadow"
+                className="px-5 py-2 bg-[#F5A623] hover:bg-[#e5971a] text-black rounded-xl text-xs font-bold transition shadow-xs"
               >
                 Salvar Alterações
               </button>
@@ -167,14 +167,14 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
               <div
                 className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
                   testResult.success
-                    ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
-                    : 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
                 }`}
               >
                 {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
                 )}
                 <span className="font-mono">{testResult.msg}</span>
               </div>
@@ -182,11 +182,11 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
           </div>
 
           {/* Card Template da Mensagem */}
-          <div className="bg-[#16171B] border border-white/[0.08] rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3">
               <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
-                <label className="text-xs font-bold uppercase tracking-wider text-white">
+                <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
                   Template de Mensagem (WhatsApp)
                 </label>
               </div>
@@ -203,12 +203,12 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
               rows={8}
               value={templateInput}
               onChange={(e) => setTemplateInput(e.target.value)}
-              className="w-full bg-[#0D0E11] border border-white/[0.12] focus:border-[#F5A623] rounded-xl p-3.5 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none select-text"
+              className="w-full bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] focus:border-[#F5A623] rounded-xl p-3.5 text-xs text-zinc-900 dark:text-zinc-200 font-mono leading-relaxed focus:outline-none select-text"
             />
 
             {/* Variáveis Dinâmicas Clicáveis */}
             <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-mono uppercase text-zinc-400 block font-semibold">
+              <span className="text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 block font-semibold">
                 Variáveis Dinâmicas (Clique para inserir):
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -226,7 +226,7 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
                     key={v.tag}
                     type="button"
                     onClick={() => insertVariable(v.tag)}
-                    className="text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-[#F5A623] border border-white/[0.08] px-2 py-1 rounded-lg transition"
+                    className="text-[11px] font-mono bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-[#D97706] dark:text-[#F5A623] border border-zinc-200 dark:border-white/[0.08] px-2 py-1 rounded-lg transition"
                     title={v.desc}
                   >
                     {v.tag}
@@ -236,9 +236,9 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
             </div>
 
             {/* Taxa de Comissão Padrão */}
-            <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between">
+            <div className="pt-3 border-t border-zinc-100 dark:border-white/[0.08] flex items-center justify-between">
               <div>
-                <span className="text-xs font-semibold text-white block">Taxa de Comissão Estimada</span>
+                <span className="text-xs font-semibold text-zinc-900 dark:text-white block">Taxa de Comissão Estimada</span>
                 <span className="text-[10px] text-zinc-500">Usada nos cálculos de repasse do balcão</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -248,7 +248,7 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
                   max="50"
                   value={commissionRate}
                   onChange={(e) => setCommissionRate(e.target.value)}
-                  className="w-16 bg-[#0D0E11] border border-white/[0.12] rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-white text-center focus:outline-none"
+                  className="w-16 bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-zinc-900 dark:text-white text-center focus:outline-none"
                 />
                 <span className="text-xs font-mono text-zinc-400">%</span>
               </div>
@@ -262,9 +262,9 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
         <div className="lg:col-span-5 space-y-6">
           
           {/* Card de Visualização do WhatsApp */}
-          <div className="bg-[#16171B] border border-white/[0.08] rounded-2xl p-6 shadow-xl space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-emerald-400" />
+          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
               <span>Simulação de Mensagem no WhatsApp</span>
             </h4>
 
@@ -280,7 +280,7 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
                   .replace(/{TOTAL_PONTOS}/g, '3.450')
                   .replace(/{CUPOM}/g, 'RODRIGO10')}
               </div>
-              <div className="flex justify-between items-center mt-2 px-1 text-[10px] text-zinc-500 font-mono">
+              <div className="flex justify-between items-center mt-2 px-1 text-[10px] text-zinc-400 font-mono">
                 <span>Evolution API</span>
                 <span>{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
@@ -288,15 +288,15 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
           </div>
 
           {/* Card Arquitetura do n8n */}
-          <div className="bg-[#16171B] border border-white/[0.08] rounded-2xl p-5 shadow-xl space-y-3 text-xs">
-            <div className="flex items-center gap-2 text-white font-bold uppercase tracking-wider text-[11px]">
+          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-5 shadow-xs dark:shadow-xl space-y-3 text-xs">
+            <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold uppercase tracking-wider text-[11px]">
               <Layers className="w-4 h-4 text-[#F5A623]" />
               <span>Fluxo no n8n Recomendado</span>
             </div>
-            <ol className="list-decimal list-inside space-y-1.5 text-zinc-400 text-[11px]">
-              <li><strong className="text-zinc-200">Webhook Node:</strong> Recebe o POST em modo JSON.</li>
-              <li><strong className="text-zinc-200">Google Sheets Node:</strong> Salva timestamp, personal, aluno e valor.</li>
-              <li><strong className="text-zinc-200">Evolution API Node:</strong> Envia <code className="text-[#F5A623]">whatsappMessagePreview</code> para o telefone <code className="text-emerald-400">personal.phone</code>.</li>
+            <ol className="list-decimal list-inside space-y-1.5 text-zinc-600 dark:text-zinc-400 text-[11px]">
+              <li><strong className="text-zinc-900 dark:text-zinc-200">Webhook Node:</strong> Recebe o POST em modo JSON.</li>
+              <li><strong className="text-zinc-900 dark:text-zinc-200">Google Sheets Node:</strong> Salva timestamp, personal, aluno e valor.</li>
+              <li><strong className="text-zinc-900 dark:text-zinc-200">Evolution API Node:</strong> Envia <code className="text-[#D97706] dark:text-[#F5A623]">whatsappMessagePreview</code> para o telefone <code className="text-emerald-600 dark:text-emerald-400">personal.phone</code>.</li>
             </ol>
           </div>
 
