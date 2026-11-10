@@ -2,7 +2,7 @@ import React, { forwardRef, useId } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Loader2, Search, X } from 'lucide-react';
 import { spring } from './motion';
-import { avatarSrc } from '../services/imageService';
+import { avatarSrc, initialsAvatar } from '../services/imageService';
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
 
@@ -317,16 +317,29 @@ export const Avatar: React.FC<{
   size?: number;
   ring?: boolean;
   className?: string;
-}> = ({ personal, size = 40, ring, className }) => (
-  <img
-    src={avatarSrc(personal)}
-    alt=""
-    width={size}
-    height={size}
-    className={cx('rounded-full object-cover shrink-0 bg-fill/12', ring && 'ring-2 ring-tint ring-offset-2 ring-offset-surface', className)}
-    style={{ width: size, height: size }}
-  />
-);
+}> = ({ personal, size = 40, ring, className }) => {
+  // Foto corrompida ou inválida volta para as iniciais
+  const [failed, setFailed] = React.useState(false);
+  const ref = React.useRef<HTMLImageElement>(null);
+  React.useEffect(() => {
+    setFailed(false);
+    // Imagens data: podem falhar antes do React ouvir o evento de erro
+    const img = ref.current;
+    if (img && img.complete && img.naturalWidth === 0 && personal.avatarUrl) setFailed(true);
+  }, [personal.avatarUrl]);
+  return (
+    <img
+      ref={ref}
+      src={failed ? initialsAvatar(personal.name) : avatarSrc(personal)}
+      onError={() => setFailed(true)}
+      alt=""
+      width={size}
+      height={size}
+      className={cx('rounded-full object-cover shrink-0 bg-fill/12', ring && 'ring-2 ring-tint ring-offset-2 ring-offset-surface', className)}
+      style={{ width: size, height: size }}
+    />
+  );
+};
 
 /* ───────────────────────────── Selo de status ───────────────────────────── */
 

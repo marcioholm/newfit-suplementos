@@ -28,6 +28,8 @@ interface LeaderboardViewProps {
   onOpenTvMode?: () => void;
   /** Texto do estado vazio (o portal do personal usa outro) */
   emptyState?: { title: string; message: string };
+  /** De onde vêm os dados (planilha ou aparelho) */
+  sourceNote?: string;
 }
 
 const PERIODS: { value: PeriodFilter; label: string }[] = [
@@ -46,7 +48,8 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   onSelectPersonalForSale,
   onNavigateToPersonais,
   onOpenTvMode,
-  emptyState
+  emptyState,
+  sourceNote
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -221,9 +224,12 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           <Section
             title="Classificação"
             footer={
-              period !== 'all' && totalVolume > 0
-                ? `${formatCurrencyBRL(totalVolume)} em vendas indicadas no período.`
-                : undefined
+              [
+                period !== 'all' && totalVolume > 0 ? `${formatCurrencyBRL(totalVolume)} em vendas indicadas no período.` : '',
+                sourceNote ?? ''
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined
             }
           >
             {leaderboard.length > 5 && (

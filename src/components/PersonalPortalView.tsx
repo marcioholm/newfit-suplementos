@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Copy, Share, Store, UserRound } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Copy, Loader2, RotateCw, Share, Store, UserRound, WifiOff } from 'lucide-react';
 import { Personal, Sale, PeriodFilter } from '../types';
 import { formatCurrencyBRL, computeMonthStanding } from '../services/webhookService';
 import { referralText, portalUrl, shareOrCopy } from '../services/referral';
@@ -16,6 +16,7 @@ import {
   SegmentedControl
 } from '../ui/components';
 import { useToast } from '../ui/Toast';
+import { Button } from '../ui/components';
 import { ChevronsUpDown } from 'lucide-react';
 
 interface PersonalPortalViewProps {
@@ -23,12 +24,25 @@ interface PersonalPortalViewProps {
   sales: Sale[];
   initialCode?: string;
   onExitPortal?: () => void;
+  loading?: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
+  sourceNote?: string;
 }
 
 type PortalTab = 'ranking' | 'meu-espaco';
 
 /** Portal público dos personais: ranking + espaço pessoal, sem dados do balcão. */
-export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({ personais, sales, initialCode = '', onExitPortal }) => {
+export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({
+  personais,
+  sales,
+  initialCode = '',
+  onExitPortal,
+  loading,
+  failed,
+  onRetry,
+  sourceNote
+}) => {
   const toast = useToast();
   const active = useMemo(() => personais.filter((p) => p.active), [personais]);
   const codeMatch = active.find((p) => p.code.toLowerCase() === initialCode.toLowerCase());
@@ -37,6 +51,14 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({ personai
   const [period, setPeriod] = useState<PeriodFilter>('month');
   const [personalId, setPersonalId] = useState<string>(codeMatch?.id ?? active[0]?.id ?? '');
   const personal = active.find((p) => p.id === personalId) || active[0] || null;
+
+  // Os dados chegam da planilha depois da primeira renderização: aplica o cupom do link quando chegarem
+  useEffect(() => {
+    if (codeMatch && !active.some((p) => p.id === personalId)) {
+      setPersonalId(codeMatch.id);
+      setTab('meu-espaco');
+    }
+  }, [codeMatch, active, personalId]);
 
   const mine = useMemo(() => {
     if (!personal) return null;
@@ -77,12 +99,32 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({ personai
       </header>
 
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-[calc(env(safe-area-inset-bottom)+32px)]">
-        {noData ? (
+        {noData && loading ? (
+          <div className="pt-24 flex flex-col items-center text-label-2" role="status">
+            <Loader2 className="w-7 h-7 animate-spin" aria-hidden />
+            <p className="type-subhead mt-3">Carregando ranking…</p>
+          </div>
+        ) : noData && failed ? (
+          <div className="pt-10">
+            <EmptyState
+              icon={<WifiOff className="w-7 h-7" />}
+              title="Não foi possível carregar"
+              message="Verifique sua internet e tente de novo."
+              action={
+                onRetry && (
+                  <Button variant="filled" icon={<RotateCw className="w-4 h-4" />} onClick={onRetry}>
+                    Tentar de novo
+                  </Button>
+                )
+              }
+            />
+          </div>
+        ) : noData ? (
           <div className="pt-10">
             <EmptyState
               icon={<Store className="w-7 h-7" />}
-              title="Ranking ainda não disponível aqui"
-              message="Os dados do ranking ficam no aparelho do balcão da New Fit. Por enquanto, acompanhe sua posição pela TV da loja."
+              title="Ranking em preparação"
+              message="Os personais parceiros ainda não foram publicados. Volte em breve!"
             />
           </div>
         ) : (
@@ -106,6 +148,7 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({ personai
                 sales={sales}
                 period={period}
                 setPeriod={setPeriod}
+                sourceNote={sourceNote}
                 emptyState={{ title: 'Ranking vazio', message: 'O ranking aparece aqui depois das primeiras vendas.' }}
               />
             ) : (

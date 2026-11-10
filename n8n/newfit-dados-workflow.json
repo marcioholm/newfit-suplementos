@@ -1,0 +1,163 @@
+{
+  "name": "New Fit - Dados públicos (portal e ranking)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "newfit-dados",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://newfit-suplementos.vercel.app,https://newfit-suplementos-git-main-solarcom.vercel.app,http://localhost:5173"
+        }
+      },
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "name": "Webhook Dados",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "e3f5a7b9-2b4c-4d6e-9f0a-6e6577666975"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Personais",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000002",
+      "name": "Ler Personais",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Vendas",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000003",
+      "name": "Ler Vendas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        480,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta os dados públicos do portal/ranking: sem telefones e sem nomes de alunos\nconst rows = (node) => $(node).all().map((i) => i.json).filter((r) => r && Object.keys(r).length);\n\nconst num = (v) => {\n  if (typeof v === 'number') return v;\n  const s = String(v ?? '').replace(/[^\\d,.-]/g, '');\n  if (!s) return 0;\n  return s.includes(',') ? Number(s.replace(/\\./g, '').replace(',', '.')) || 0 : Number(s) || 0;\n};\n\n// \"09/11/2026 14:04:00\" (horário de Brasília) -> ISO\nconst toISO = (v) => {\n  const m = String(v ?? '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})[ T](\\d{2}):(\\d{2})(?::(\\d{2}))?/);\n  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}-03:00`;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n};\n\nconst personais = rows('Ler Personais')\n  .filter((r) => r['ID'] && r['Nome'])\n  .map((r) => {\n    const ativo = String(r['Ativo'] ?? 'sim').toLowerCase();\n    const foto = String(r['Foto'] ?? '');\n    return {\n      id: String(r['ID']),\n      name: String(r['Nome']),\n      firstName: String(r['Primeiro Nome'] || String(r['Nome']).split(' ')[0]),\n      gym: String(r['Academia'] ?? ''),\n      code: String(r['Cupom'] ?? ''),\n      active: !['não', 'nao', 'false', '0'].includes(ativo),\n      avatarUrl: foto.startsWith('data:image/') ? foto : undefined\n    };\n  });\n\nconst ids = new Set(personais.map((p) => p.id));\n\nconst sales = rows('Ler Vendas')\n  .filter((r) => r['ID Venda'] && ids.has(String(r['Personal ID'])))\n  .map((r) => ({\n    id: String(r['ID Venda']),\n    personalId: String(r['Personal ID']),\n    personalName: String(r['Personal'] ?? ''),\n    value: num(r['Valor (R$)']),\n    pointsAdded: Math.round(num(r['Pontos'])),\n    notes: String(r['Itens'] ?? ''),\n    timestamp: toISO(r['Data/Hora'])\n  }))\n  .filter((s) => s.timestamp);\n\nreturn [{ json: { updatedAt: new Date().toISOString(), personais, sales } }];\n"
+      },
+      "id": "d1000000-0000-4000-8000-000000000004",
+      "name": "Montar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "d1000000-0000-4000-8000-000000000005",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Dados": {
+      "main": [
+        [
+          {
+            "node": "Ler Personais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Personais": {
+      "main": [
+        [
+          {
+            "node": "Ler Vendas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Vendas": {
+      "main": [
+        [
+          {
+            "node": "Montar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Dados": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  }
+}

@@ -7,7 +7,7 @@
         "path": "newfit-vendas",
         "responseMode": "onReceived",
         "options": {
-          "allowedOrigins": "https://SEU-APP.vercel.app"
+          "allowedOrigins": "https://newfit-suplementos.vercel.app,https://newfit-suplementos-git-main-solarcom.vercel.app,http://localhost:5173"
         }
       },
       "id": "a0f1c001-0001-4000-8000-000000000001",

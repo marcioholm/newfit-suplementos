@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Copy, Eye, Loader2, Lock, MessageCircle, Plus, Share, Users } from 'lucide-react';
+import { CloudUpload, Copy, Eye, Loader2, Lock, MessageCircle, Plus, Share, Users } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import { resizeImageToAvatar, avatarSrc } from '../services/imageService';
@@ -29,6 +29,10 @@ interface PersonaisViewProps {
   onUpdatePersonal: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
   onLock?: () => void;
   onOpenPortal?: (code?: string) => void;
+  /** IDs dos personais que já estão na planilha (null = ainda não carregou) */
+  syncedIds?: Set<string> | null;
+  /** Envia todos os personais deste aparelho para a planilha */
+  onSyncAll?: () => Promise<{ success: boolean; statusText: string }>;
 }
 
 /** 5543998213344 → (43) 99821-3344 */
@@ -133,9 +137,13 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
   onToggleActive,
   onUpdatePersonal,
   onLock,
-  onOpenPortal
+  onOpenPortal,
+  syncedIds,
+  onSyncAll
 }) => {
   const toast = useToast();
+  const [syncing, setSyncing] = useState(false);
+  const pendingSync = syncedIds ? personais.filter((p) => !syncedIds.has(p.id)).length : null;
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -248,9 +256,46 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
           )}
           <Section
             title="Portal dos personais"
-            footer="Atenção: por enquanto o portal só mostra dados no aparelho do balcão. No celular do personal ele aparece vazio até o ranking ir para o servidor."
+            footer={
+              pendingSync === null
+                ? 'O portal mostra os personais e vendas registrados na planilha.'
+                : pendingSync === 0
+                ? `Todos os ${personais.length} personais estão no portal.`
+                : `${pendingSync} ${pendingSync === 1 ? 'personal deste aparelho ainda não está' : 'personais deste aparelho ainda não estão'} no portal. Toque em “Enviar personais ao portal”.`
+            }
           >
             <Group>
+              {onSyncAll && (
+                <Row
+                  onClick={
+                    syncing
+                      ? undefined
+                      : async () => {
+                          setSyncing(true);
+                          try {
+                            await onSyncAll();
+                          } finally {
+                            setSyncing(false);
+                          }
+                        }
+                  }
+                  leading={
+                    syncing ? (
+                      <Loader2 className="w-5 h-5 text-tint-text animate-spin" aria-hidden />
+                    ) : (
+                      <CloudUpload className="w-5 h-5 text-tint-text" aria-hidden />
+                    )
+                  }
+                  title={<span className="text-tint-text">{syncing ? 'Enviando…' : 'Enviar personais ao portal'}</span>}
+                  trailing={
+                    pendingSync !== null && pendingSync > 0 ? (
+                      <span className="min-w-6 h-6 px-2 rounded-full bg-red-fill text-white type-footnote font-semibold flex items-center justify-center tabular-nums">
+                        {pendingSync}
+                      </span>
+                    ) : undefined
+                  }
+                />
+              )}
               <Row
                 onClick={async () => {
                   const r = await shareOrCopy({

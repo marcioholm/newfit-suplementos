@@ -124,8 +124,22 @@ Linguagem visual da Apple (iOS/macOS): fonte do sistema, cores semânticas com m
 ## 👥 Portal do Personal
 
 - Link: `/?portal=personal` (ou `/?portal=personal&code=CUPOM` para abrir direto no espaço de um personal). Em **Personais** há atalhos para compartilhar o link e enviar pelo WhatsApp.
-- Mostra o ranking e o "Meu espaço" (posição, pontos, vendas e extrato do cupom), sem dados do balcão.
-- **Limitação atual:** os dados vêm do `localStorage` do aparelho que abre o link. No celular do personal o portal aparece vazio (com aviso). Para funcionar de verdade, o ranking precisa ser servido por um backend (ex.: endpoint GET no n8n lendo a planilha, ou Supabase).
+- Mostra o ranking e o "Meu espaço" (posição, pontos, vendas e extrato do cupom). Não expõe telefones nem nomes de alunos.
+
+## 🔄 Dados compartilhados (planilha via n8n)
+
+Três fluxos no n8n (arquivos em [`n8n/`](n8n/)):
+
+| Fluxo | Endereço | Função |
+| :--- | :--- | :--- |
+| `newfit-workflow.json` | `POST /webhook/newfit-vendas` | Grava a venda na aba **Vendas** e avisa o personal no WhatsApp |
+| `newfit-personais-workflow.json` | `POST /webhook/newfit-personais` | Grava/atualiza personais na aba **Personais** (por ID) |
+| `newfit-dados-workflow.json` | `GET /webhook/newfit-dados` | Devolve personais e vendas públicos para o portal, o Ranking e o Modo TV |
+
+- Os endereços de personais e dados são derivados da URL de vendas (troca o último trecho). Para usar outros, defina `VITE_N8N_PERSONAIS_URL` e `VITE_N8N_DADOS_URL`.
+- Cadastrar, trocar foto ou ativar/desativar um personal envia o cadastro na hora. Em **Personais → Enviar personais ao portal** dá para subir todos os cadastros do aparelho.
+- O Ranking, o Modo TV e o portal usam os dados da planilha quando disponíveis (atualização a cada 60 s; 30 s no Modo TV) e guardam a última resposta para abrir sem internet. Sem dados da planilha, usam os deste aparelho.
+- Nos três webhooks, configure **Allowed Origins (CORS)** com o domínio da Vercel.
 
 ## 💾 Persistência e Limitações
 

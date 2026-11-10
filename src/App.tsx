@@ -21,6 +21,7 @@ import { WebhookSettingsView } from './components/WebhookSettingsView';
 import { TvModeView } from './components/TvModeView';
 import { PinModal } from './components/PinModal';
 import { PersonalPortalView } from './components/PersonalPortalView';
+import { syncPersonais, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
@@ -298,6 +299,9 @@ export function App() {
       ...prev.slice(0, 49) // Keep last 50 logs
     ]);
 
+    // O n8n grava na planilha logo depois de responder: atualiza o ranking oficial em seguida
+    if (webhookResult.success) window.setTimeout(remote.refresh, 4000);
+
     return { success: webhookResult.success, statusText: webhookResult.statusText };
   };
 
@@ -350,6 +354,22 @@ export function App() {
     setSales((prev) => prev.filter((s) => s.id !== saleId));
   };
 
+  // Envia o cadastro para a planilha (portal e ranking de outros aparelhos)
+  const pushPersonais = async (list: Personal[], { silent = true } = {}) => {
+    const res = await syncPersonais(personaisSyncUrl(settings.webhookUrl), list);
+    if (!res.success) {
+      toast.show({
+        kind: 'error',
+        title: 'Personal salvo só neste aparelho',
+        message: `Não foi enviado ao portal. ${res.statusText}. Use "Enviar personais ao portal" em Personais.`
+      });
+    } else {
+      if (!silent) toast.show({ kind: 'success', title: `${list.length} ${list.length === 1 ? 'personal enviado' : 'personais enviados'} ao portal` });
+      window.setTimeout(remote.refresh, 4000);
+    }
+    return res;
+  };
+
   // 6. ACTION: ADD PERSONAL
   const handleAddPersonal = (newPersonalData: Omit<Personal, 'id' | 'createdAt'>) => {
     const newPersonal: Personal = {
@@ -358,18 +378,23 @@ export function App() {
       createdAt: new Date().toISOString()
     };
     setPersonais((prev) => [...prev, newPersonal]);
+    pushPersonais([newPersonal]);
   };
 
   // 6b. ACTION: UPDATE PERSONAL (ex.: trocar foto)
   const handleUpdatePersonal = (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => {
+    const current = personais.find((p) => p.id === id);
     setPersonais((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes } : p)));
+    if (current) pushPersonais([{ ...current, ...changes }]);
   };
 
   // 7. ACTION: TOGGLE ACTIVE
   const handleToggleActivePersonal = (id: string) => {
+    const current = personais.find((p) => p.id === id);
     setPersonais((prev) =>
       prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p))
     );
+    if (current) pushPersonais([{ ...current, active: !current.active }]);
   };
 
   // Quick sale shortcut from leaderboard
@@ -383,6 +408,15 @@ export function App() {
     setActiveTab('ranking');
     toast.show({ kind: 'info', title: 'Áreas administrativas bloqueadas' });
   };
+
+  // Dados oficiais da planilha (todas as vendas, todos os aparelhos); sem eles, usa os deste aparelho
+  const remote = useRemoteData(dadosUrl(settings.webhookUrl), isTvMode ? 30000 : 60000);
+  const shared = remote.data && remote.data.personais.length > 0 ? remote.data : null;
+  const rankingPersonais = shared?.personais ?? personais;
+  const rankingSales = shared?.sales ?? sales;
+  const rankingSource = shared
+    ? `Atualizado às ${new Date(shared.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
+    : 'Dados deste aparelho';
 
   // Nunca renderiza área protegida sem PIN, nem por um quadro
   const visibleTab: TabId = isUnlocked ? activeTab : 'ranking';
@@ -409,8 +443,12 @@ export function App() {
     return (
       <MotionConfig reducedMotion="user">
         <PersonalPortalView
-          personais={personais}
-          sales={sales}
+          personais={shared ? shared.personais : personais}
+          sales={shared ? shared.sales : sales}
+          loading={!shared && personais.length === 0 && (remote.state.status === 'loading' || remote.state.status === 'idle')}
+          failed={!shared && personais.length === 0 && remote.state.status === 'error'}
+          onRetry={remote.refresh}
+          sourceNote={rankingSource}
           initialCode={portalState.code}
           onExitPortal={exitPortal}
         />
@@ -427,8 +465,9 @@ export function App() {
           <div className="max-w-[1040px] mx-auto px-4 sm:px-6 lg:px-10">
             {visibleTab === 'ranking' && (
               <LeaderboardView
-                personais={personais}
-                sales={sales}
+                personais={rankingPersonais}
+                sales={rankingSales}
+                sourceNote={rankingSource}
                 period={period}
                 setPeriod={setPeriod}
                 onSelectPersonalForSale={handleSelectPersonalForSale}
@@ -456,6 +495,8 @@ export function App() {
                 personais={personais}
                 sales={sales}
                 onAddPersonal={handleAddPersonal}
+                syncedIds={remote.data ? new Set(remote.data.personais.map((p) => p.id)) : null}
+                onSyncAll={() => pushPersonais(personais, { silent: false })}
                 onToggleActive={handleToggleActivePersonal}
                 onUpdatePersonal={handleUpdatePersonal}
                 onLock={lockAdmin}
@@ -476,7 +517,7 @@ export function App() {
 
         <TabBar {...navProps} />
 
-        {isTvMode && <TvModeView personais={personais} sales={sales} onClose={() => setIsTvMode(false)} />}
+        {isTvMode && <TvModeView personais={rankingPersonais} sales={rankingSales} onClose={() => setIsTvMode(false)} />}
 
         <PinModal
           correctPin={ADMIN_PIN}
