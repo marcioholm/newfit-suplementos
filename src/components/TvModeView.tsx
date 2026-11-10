@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, X, Trophy } from 'lucide-react';
 import { Personal, Sale } from '../types';
+import { avatarSrc } from '../services/imageService';
 import { formatCurrencyBRL } from '../services/webhookService';
 
 interface TvModeViewProps {
@@ -134,7 +135,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
                   <span className="font-mono text-4xl font-extrabold text-zinc-500">02</span>
                   <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
                     <img
-                      src={secondPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${secondPlace.personal.name}`}
+                      src={avatarSrc(secondPlace.personal)}
                       alt={secondPlace.personal.name}
                       className="w-full h-full object-cover"
                     />
@@ -170,7 +171,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
                   </div>
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#F5A623] shadow-lg">
                     <img
-                      src={firstPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${firstPlace.personal.name}`}
+                      src={avatarSrc(firstPlace.personal)}
                       alt={firstPlace.personal.name}
                       className="w-full h-full object-cover"
                     />
@@ -209,7 +210,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
                   <span className="font-mono text-4xl font-extrabold text-zinc-600">03</span>
                   <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/[0.15]">
                     <img
-                      src={thirdPlace.personal.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${thirdPlace.personal.name}`}
+                      src={avatarSrc(thirdPlace.personal)}
                       alt={thirdPlace.personal.name}
                       className="w-full h-full object-cover"
                     />

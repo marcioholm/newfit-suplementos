@@ -45,7 +45,6 @@ export interface LeaderboardEntry {
 }
 
 export interface AppSettings {
-  pinCode: string;
   commissionRate: number; // 0.10 para 10%
   webhookUrl: string; // URL do n8n
   whatsappTemplate: string;

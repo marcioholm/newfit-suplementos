@@ -17,6 +17,9 @@ export const PinModal: React.FC<PinModalProps> = ({
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
 
+  // O PIN vem da variável VITE_ADMIN_PIN (4 dígitos). Sem ela, nada é liberado.
+  const isPinConfigured = /^\d{4}$/.test(correctPin);
+
   if (!isOpen) return null;
 
   const handleDigit = (digit: string) => {
@@ -26,7 +29,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       setError(false);
 
       if (nextPin.length === 4) {
-        if (nextPin === correctPin) {
+        if (isPinConfigured && nextPin === correctPin) {
           onSuccess();
           setPin('');
         } else {
@@ -56,8 +59,14 @@ export const PinModal: React.FC<PinModalProps> = ({
             <div className="w-10 h-10 rounded-2xl bg-[#F5A623]/10 border border-[#F5A623]/30 flex items-center justify-center text-[#F5A623]">
               <Lock className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-white mt-2">Acesso ao Balcão</h3>
-            <p className="text-[11px] text-zinc-400">Insira o PIN do Leo (padrão: 1234)</p>
+            <h3 className="text-sm font-bold text-white mt-2">Acesso restrito</h3>
+            {isPinConfigured ? (
+              <p className="text-[11px] text-zinc-400">Insira o PIN de 4 dígitos</p>
+            ) : (
+              <p className="text-[11px] text-red-400 text-center">
+                PIN não configurado. Defina VITE_ADMIN_PIN na Vercel e faça um novo deploy.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white p-1">
             <X className="w-4 h-4" />

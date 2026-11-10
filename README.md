@@ -22,7 +22,7 @@ O sistema abrirá automaticamente em: **`http://localhost:5173`**.
 
 | Ator / Modo | Acesso | Objetivo |
 | :--- | :--- | :--- |
-| **Leo (Proprietário/Balcão)** | Protegido por PIN (`1234`) | Lançar vendas rápidas no balcão com seleção do personal, aluno, valor em R$ e itens comprados. Dispara o webhook n8n instantaneamente. |
+| **Leo (Proprietário/Balcão)** | Protegido por PIN (variável `VITE_ADMIN_PIN`) | Lançar vendas rápidas no balcão com seleção do personal, aluno, valor em R$ e itens comprados. Dispara o webhook n8n instantaneamente. |
 | **Personal Partner** | Aberto / Link direto | Acompanhar sua posição no ranking, volume acumulado, pontuação e meta. |
 | **Modo TV (Loja Física)** | Tela cheia (Tecla `Modo TV` ou `ESC`) | Exibir o ranking do mês em um telão na loja física com relógio ao vivo para estimular a competição entre personais e alunos. |
 
@@ -96,7 +96,22 @@ New Fit Suplementos 👊
 
 ---
 
-## ⚙️ Configurações & Persistência
-- Todas as vendas, personais cadastrados e logs de webhook são persistidos automaticamente no `localStorage`.
-- Na aba **Automação & n8n**, você pode alterar a URL do Webhook, editar o template da mensagem com tags dinâmicas e testar a conexão com um botão de ping.
-- PIN padrão de desbloqueio do Balcão: **`1234`**.
+## ⚙️ Configuração em Produção (Vercel)
+
+Defina em **Vercel → Settings → Environment Variables** e faça um **Redeploy** (variáveis `VITE_` só entram no build):
+
+| Variável | Exemplo | Uso |
+| :--- | :--- | :--- |
+| `VITE_N8N_WEBHOOK_URL` | `https://seu-n8n.com/webhook/newfit-vendas` | URL padrão do webhook em todo aparelho novo |
+| `VITE_ADMIN_PIN` | 4 dígitos | Libera Balcão, Personais e Automação. Sem ela, nenhuma área administrativa abre. |
+
+> O PIN fica dentro do JavaScript publicado: ele impede o acesso casual pelo link, mas não é uma proteção forte. Não reutilize uma senha importante.
+
+O fluxo do n8n de referência está em [`n8n/newfit-workflow.json`](n8n/newfit-workflow.json). No nó Webhook, configure **Allowed Origins (CORS)** com o domínio da Vercel.
+
+## 💾 Persistência e Limitações
+
+- Personais (incluindo fotos), vendas e logs ficam salvos no `localStorage` **do navegador de cada aparelho**. Use sempre o mesmo aparelho/navegador para o Balcão; o ranking oficial é a aba **Ranking do Mês** da planilha.
+- Limpar os dados do navegador apaga os personais cadastrados nele (as vendas continuam na planilha).
+- As fotos dos personais são recortadas em quadrado e comprimidas (~320 px, ~25 KB) antes de salvar.
+- Na aba **Automação & n8n**, é possível editar a URL do webhook neste aparelho, o template da mensagem e testar a conexão com um ping.
