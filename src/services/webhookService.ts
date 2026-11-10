@@ -203,10 +203,10 @@ export async function sendSaleWebhook({
 }): Promise<{ success: boolean; statusText: string; simulated?: boolean }> {
   // Se não houver webhook configurado ou se for URL padrão não acessível externamente
   if (!webhookUrl || webhookUrl.trim() === '') {
+    // Sem URL não há envio: nunca reportar como sucesso
     return {
-      success: true,
-      statusText: 'Simulado (Nenhum Webhook configurado nos Ajustes)',
-      simulated: true
+      success: false,
+      statusText: 'Webhook do n8n não configurado neste aparelho (aba Automação & n8n)'
     };
   }
 

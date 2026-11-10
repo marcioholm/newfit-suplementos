@@ -11,7 +11,9 @@ import {
   INITIAL_SALES, 
   INITIAL_SETTINGS 
 } from './data/mockData';
-import { Navbar } from './components/Navbar';
+import { TabBar, Sidebar, TabId } from './components/Navbar';
+import { useToast } from './ui/Toast';
+import { MotionConfig } from 'motion/react';
 import { LeaderboardView } from './components/LeaderboardView';
 import { LeoCounterView } from './components/LeoCounterView';
 import { PersonaisView } from './components/PersonaisView';
@@ -90,50 +92,43 @@ if (typeof window !== 'undefined') {
   }
 }
 
+/** Portal dos personais: /?portal=personal&code=CUPOM */
 function getPortalFromURL() {
   if (typeof window === 'undefined') return { isPortal: false, code: '' };
   const params = new URLSearchParams(window.location.search);
-  const isPortal = params.get('portal') === 'personal' || params.get('view') === 'personal' || window.location.hash === '#/personal';
-  const code = params.get('code') || '';
-  return { isPortal, code };
+  const isPortal =
+    params.get('portal') === 'personal' || params.get('view') === 'personal' || window.location.hash === '#/personal';
+  return { isPortal, code: params.get('code') || '' };
 }
 
 export function App() {
-  // 0. THEME STATE (LIGHT / DARK)
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('newfit_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-    }
-    return 'dark';
-  });
-
-  // Portal do Personal (visualização separada sem dados confidenciais do balcão)
   const [portalState, setPortalState] = useState(getPortalFromURL);
 
   useEffect(() => {
-    const handlePopState = () => {
-      setPortalState(getPortalFromURL());
-    };
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('hashchange', handlePopState);
+    const sync = () => setPortalState(getPortalFromURL());
+    window.addEventListener('popstate', sync);
+    window.addEventListener('hashchange', sync);
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('hashchange', handlePopState);
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener('hashchange', sync);
     };
   }, []);
 
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('newfit_theme', theme);
-  }, [theme]);
+  const openPortal = (code?: string) => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('portal', 'personal');
+    if (code) url.searchParams.set('code', code);
+    window.history.pushState({}, '', url.toString());
+    setIsUnlocked(false);
+    setPortalState({ isPortal: true, code: code || '' });
+    window.scrollTo(0, 0);
+  };
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  const exitPortal = () => {
+    window.history.pushState({}, '', window.location.pathname);
+    setPortalState({ isPortal: false, code: '' });
+    window.scrollTo(0, 0);
   };
 
   // 1. PERSISTENT STATE (LOCALSTORAGE)
@@ -175,13 +170,34 @@ export function App() {
   }, [webhookLogs]);
 
   // 2. UI NAVIGATION STATE
-  const [activeTab, setActiveTab] = useState<'ranking' | 'balcao' | 'personais' | 'webhook'>('ranking');
-  const [pendingTab, setPendingTab] = useState<'ranking' | 'balcao' | 'personais' | 'webhook'>('balcao');
+  const toast = useToast();
+  const [activeTab, setActiveTab] = useState<TabId>('ranking');
+  const [pendingTab, setPendingTab] = useState<TabId>('balcao');
   const [period, setPeriod] = useState<PeriodFilter>('month');
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
   const [preselectedPersonalId, setPreselectedPersonalId] = useState<string | undefined>(undefined);
+
+  // Bloqueado, só o Ranking fica visível (vale para TV, portal e bloqueio manual)
+  useEffect(() => {
+    if (!isUnlocked && activeTab !== 'ranking') setActiveTab('ranking');
+  }, [isUnlocked, activeTab]);
+
+  // Atalhos do app instalado (manifest): /?tab=balcao e /?tv=1
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') as TabId | null;
+    if (params.get('tv') === '1') {
+      setIsTvMode(true);
+    } else if (tab && ['balcao', 'personais', 'webhook'].includes(tab)) {
+      setPendingTab(tab);
+      setIsPinModalOpen(true);
+    }
+    if (params.has('tab') || params.has('tv')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   // ESC key exits TV Mode
   useEffect(() => {
@@ -195,7 +211,7 @@ export function App() {
   }, [isTvMode]);
 
   // Navegação com trava de PIN para áreas administrativas
-  const handleNavigateToTab = (tab: 'ranking' | 'balcao' | 'personais' | 'webhook') => {
+  const handleNavigateToTab = (tab: TabId) => {
     if (tab !== 'ranking' && !isUnlocked) {
       setPendingTab(tab);
       setIsPinModalOpen(true);
@@ -211,7 +227,7 @@ export function App() {
     value: number;
     notes: string;
     timestamp: string;
-  }) => {
+  }): Promise<{ success: boolean; statusText: string }> => {
     const personal = personais.find((p) => p.id === data.personalId);
     if (!personal) throw new Error('Personal não encontrado');
 
@@ -281,6 +297,8 @@ export function App() {
       },
       ...prev.slice(0, 49) // Keep last 50 logs
     ]);
+
+    return { success: webhookResult.success, statusText: webhookResult.statusText };
   };
 
   // 4. ACTION: RESEND WEBHOOK
@@ -320,7 +338,11 @@ export function App() {
       )
     );
 
-    alert(`Reenvio de webhook: ${res.statusText}`);
+    if (res.success) {
+      toast.show({ kind: 'success', title: 'Venda reenviada', message: `${personal.firstName} será avisado pelo WhatsApp.` });
+    } else {
+      toast.show({ kind: 'error', title: 'Reenvio falhou', message: res.statusText });
+    }
   };
 
   // 5. ACTION: DELETE SALE
@@ -356,129 +378,118 @@ export function App() {
     handleNavigateToTab('balcao');
   };
 
-  // Se estiver no link do portal dos personais, renderiza a visualização exclusiva
+  const lockAdmin = () => {
+    setIsUnlocked(false);
+    setActiveTab('ranking');
+    toast.show({ kind: 'info', title: 'Áreas administrativas bloqueadas' });
+  };
+
+  // Nunca renderiza área protegida sem PIN, nem por um quadro
+  const visibleTab: TabId = isUnlocked ? activeTab : 'ranking';
+
+  const navProps = {
+    activeTab: visibleTab,
+    onSelect: handleNavigateToTab,
+    isUnlocked,
+    onLockClick: () => {
+      if (isUnlocked) {
+        lockAdmin();
+      } else {
+        setPendingTab(activeTab === 'ranking' ? 'balcao' : activeTab);
+        setIsPinModalOpen(true);
+      }
+    },
+    onOpenTvMode: () => {
+      setIsUnlocked(false);
+      setIsTvMode(true);
+    }
+  };
+
   if (portalState.isPortal) {
     return (
-      <PersonalPortalView
-        personais={personais}
-        sales={sales}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        initialCode={portalState.code}
-        onExitPortal={() => {
-          if (typeof window !== 'undefined' && window.history.pushState) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('portal');
-            url.searchParams.delete('view');
-            url.searchParams.delete('code');
-            window.history.pushState({}, '', url.pathname);
-          }
-          setPortalState({ isPortal: false, code: '' });
-        }}
-      />
+      <MotionConfig reducedMotion="user">
+        <PersonalPortalView
+          personais={personais}
+          sales={sales}
+          initialCode={portalState.code}
+          onExitPortal={exitPortal}
+        />
+      </MotionConfig>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-[#090A0C] text-zinc-900 dark:text-zinc-100 antialiased selection:bg-[#F5A623] selection:text-black transition-colors duration-150">
-      
-      {/* NAVBAR PRINCIPAL */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={handleNavigateToTab}
-        onOpenTvMode={() => {
-          setIsUnlocked(false);
-          setIsTvMode(true);
-        }}
-        onOpenPersonalPortal={() => {
-          if (typeof window !== 'undefined' && window.history.pushState) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('portal', 'personal');
-            window.history.pushState({}, '', url.toString());
-          }
-          setPortalState({ isPortal: true, code: '' });
-        }}
-        isUnlocked={isUnlocked}
-        onLockClick={() => {
-          if (isUnlocked) {
-            setIsUnlocked(false);
-          } else {
-            setPendingTab(activeTab === 'ranking' ? 'balcao' : activeTab);
-            setIsPinModalOpen(true);
-          }
-        }}
-        currentMonthSalesTotal={sales.length}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-[100dvh] bg-bg text-label">
+        <Sidebar {...navProps} />
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 pb-12">
-        {activeTab === 'ranking' && (
-          <LeaderboardView
-            personais={personais}
-            sales={sales}
-            period={period}
-            setPeriod={setPeriod}
-            onSelectPersonalForSale={handleSelectPersonalForSale}
-            onNavigateToPersonais={() => handleNavigateToTab('personais')}
-          />
-        )}
+        <main className="lg:pl-[260px] pb-[calc(env(safe-area-inset-bottom)+84px)] lg:pb-16">
+          <div className="max-w-[1040px] mx-auto px-4 sm:px-6 lg:px-10">
+            {visibleTab === 'ranking' && (
+              <LeaderboardView
+                personais={personais}
+                sales={sales}
+                period={period}
+                setPeriod={setPeriod}
+                onSelectPersonalForSale={handleSelectPersonalForSale}
+                onNavigateToPersonais={() => handleNavigateToTab('personais')}
+                onOpenTvMode={navProps.onOpenTvMode}
+              />
+            )}
 
-        {activeTab === 'balcao' && (
-          <LeoCounterView
-            personais={personais}
-            sales={sales}
-            settings={settings}
-            onAddSale={handleAddSale}
-            onResendWebhook={handleResendWebhook}
-            onDeleteSale={handleDeleteSale}
-            preselectedPersonalId={preselectedPersonalId}
-            onNavigateToPersonais={() => handleNavigateToTab('personais')}
-          />
-        )}
+            {visibleTab === 'balcao' && (
+              <LeoCounterView
+                personais={personais}
+                sales={sales}
+                settings={settings}
+                onAddSale={handleAddSale}
+                onResendWebhook={handleResendWebhook}
+                onDeleteSale={handleDeleteSale}
+                preselectedPersonalId={preselectedPersonalId}
+                onNavigateToPersonais={() => handleNavigateToTab('personais')}
+                onLock={lockAdmin}
+              />
+            )}
 
-        {activeTab === 'personais' && (
-          <PersonaisView
-            personais={personais}
-            sales={sales}
-            onAddPersonal={handleAddPersonal}
-            onToggleActive={handleToggleActivePersonal}
-            onUpdatePersonal={handleUpdatePersonal}
-          />
-        )}
+            {visibleTab === 'personais' && (
+              <PersonaisView
+                personais={personais}
+                sales={sales}
+                onAddPersonal={handleAddPersonal}
+                onToggleActive={handleToggleActivePersonal}
+                onUpdatePersonal={handleUpdatePersonal}
+                onLock={lockAdmin}
+                onOpenPortal={openPortal}
+              />
+            )}
 
-        {activeTab === 'webhook' && (
-          <WebhookSettingsView
-            settings={settings}
-            onUpdateSettings={(newVals) => setSettings((prev) => ({ ...prev, ...newVals }))}
-            webhookLogs={webhookLogs}
-          />
-        )}
-      </main>
+            {visibleTab === 'webhook' && (
+              <WebhookSettingsView
+                settings={settings}
+                onUpdateSettings={(newVals) => setSettings((prev) => ({ ...prev, ...newVals }))}
+                webhookLogs={webhookLogs}
+                onLock={lockAdmin}
+              />
+            )}
+          </div>
+        </main>
 
-      {/* MODAL MODO TV (TELA CHEIA) */}
-      {isTvMode && (
-        <TvModeView
-          personais={personais}
-          sales={sales}
-          onClose={() => setIsTvMode(false)}
+        <TabBar {...navProps} />
+
+        {isTvMode && <TvModeView personais={personais} sales={sales} onClose={() => setIsTvMode(false)} />}
+
+        <PinModal
+          correctPin={ADMIN_PIN}
+          isOpen={isPinModalOpen}
+          onClose={() => setIsPinModalOpen(false)}
+          onSuccess={() => {
+            setIsUnlocked(true);
+            setIsPinModalOpen(false);
+            setActiveTab(pendingTab);
+          }}
         />
-      )}
-
-      {/* MODAL PIN DO LEO */}
-      <PinModal
-        correctPin={ADMIN_PIN}
-        isOpen={isPinModalOpen}
-        onClose={() => setIsPinModalOpen(false)}
-        onSuccess={() => {
-          setIsUnlocked(true);
-          setIsPinModalOpen(false);
-          setActiveTab(pendingTab);
-        }}
-      />
-
-    </div>
+      </div>
+    </MotionConfig>
   );
 }
 

@@ -1,310 +1,347 @@
-import React, { useState } from 'react';
-import { 
-  Webhook, 
-  Send, 
-  CheckCircle2, 
-  AlertCircle, 
-  MessageSquare, 
-  RotateCcw, 
-  Code2, 
-  ExternalLink,
-  Layers
-} from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Download, Lock, RotateCcw, Share, Smartphone, Zap } from 'lucide-react';
 import { AppSettings, WebhookLog } from '../types';
 import { DEFAULT_WHATSAPP_TEMPLATE } from '../data/mockData';
 import { sendSaleWebhook } from '../services/webhookService';
+import { Button, Group, IconButton, Row, ScreenHeader, Section, StatusBadge, cx } from '../ui/components';
+import { Sheet } from '../ui/Sheet';
+import { ConfirmSheet } from '../ui/ConfirmSheet';
+import { useToast } from '../ui/Toast';
+import { useInstallPrompt } from '../pwa';
+import { useAppearance, Appearance } from '../appearance';
+import { SegmentedControl } from '../ui/components';
 
 interface WebhookSettingsViewProps {
   settings: AppSettings;
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
   webhookLogs: WebhookLog[];
+  onLock?: () => void;
 }
+
+const VARIABLES = [
+  { tag: '{NOME}', desc: 'Primeiro nome' },
+  { tag: '{VALOR}', desc: 'Valor' },
+  { tag: '{ALUNO}', desc: 'Aluno' },
+  { tag: '{PRODUTOS}', desc: 'Itens' },
+  { tag: '{PONTOS}', desc: 'Pontos da venda' },
+  { tag: '{RANKING}', desc: 'Posição' },
+  { tag: '{TOTAL_PONTOS}', desc: 'Total do mês' },
+  { tag: '{CUPOM}', desc: 'Cupom' }
+];
+
+const SAMPLE: Record<string, string> = {
+  '{NOME}': 'Rodrigo',
+  '{NOME_COMPLETO}': 'Rodrigo Silva',
+  '{VALOR}': 'R$ 675,80',
+  '{ALUNO}': 'Matheus Oliveira',
+  '{PRODUTOS}': '2x 100% Whey Dux + Creatina Creapure',
+  '{PONTOS}': '676',
+  '{RANKING}': '1º lugar',
+  '{TOTAL_PONTOS}': '3.450',
+  '{ACADEMIA}': 'Coliseu Gym',
+  '{CUPOM}': 'RODRIGO10'
+};
+
+type TestState = { status: 'idle' } | { status: 'testing' } | { status: 'ok' | 'fail'; message: string };
 
 export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
   settings,
   onUpdateSettings,
-  webhookLogs
+  webhookLogs,
+  onLock
 }) => {
-  const [urlInput, setUrlInput] = useState(settings.webhookUrl);
-  const [templateInput, setTemplateInput] = useState(settings.whatsappTemplate);
-  const [commissionRate, setCommissionRate] = useState(String(settings.commissionRate * 100));
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; msg: string } | null>(null);
-  const [activeLogPayload, setActiveLogPayload] = useState<any | null>(null);
+  const toast = useToast();
+  const [url, setUrl] = useState(settings.webhookUrl);
+  const [template, setTemplate] = useState(settings.whatsappTemplate);
+  const [commission, setCommission] = useState(String(Math.round(settings.commissionRate * 100)));
+  const [test, setTest] = useState<TestState>({ status: 'idle' });
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [openLog, setOpenLog] = useState<WebhookLog | null>(null);
+  const templateRef = useRef<HTMLTextAreaElement>(null);
+  const install = useInstallPrompt();
+  const [appearance, setAppearance] = useAppearance();
 
-  const handleSave = () => {
-    onUpdateSettings({
-      webhookUrl: urlInput.trim(),
-      whatsappTemplate: templateInput,
-      commissionRate: (parseFloat(commissionRate) || 10) / 100
+  const commissionRate = Math.min(50, Math.max(0, parseFloat(commission.replace(',', '.')) || 0)) / 100;
+  const dirty =
+    url.trim() !== settings.webhookUrl || template !== settings.whatsappTemplate || commissionRate !== settings.commissionRate;
+
+  const preview = useMemo(
+    () => Object.entries(SAMPLE).reduce((txt, [tag, val]) => txt.split(tag).join(val), template),
+    [template]
+  );
+
+  const save = () => {
+    onUpdateSettings({ webhookUrl: url.trim(), whatsappTemplate: template, commissionRate: commissionRate || 0.1 });
+    toast.show({ kind: 'success', title: 'Ajustes salvos' });
+  };
+
+  const runTest = async () => {
+    setTest({ status: 'testing' });
+    const res = await sendSaleWebhook({
+      webhookUrl: url.trim(),
+      payload: {
+        event: 'teste_webhook_ping',
+        timestamp: new Date().toISOString(),
+        store: 'New Fit Suplementos',
+        sale: { id: 's_test_' + Date.now(), value: 499.9, notes: 'Teste de conexão', clientName: 'Aluno Teste', pointsAdded: 500 },
+        personal: { id: 'test_1', name: 'Teste', firstName: 'Teste', gym: 'New Fit', phone: '', currentMonthPoints: 0, currentRank: 1 },
+        whatsappMessagePreview: 'Teste de conexão'
+      }
     });
-    alert('Configurações de Webhook e Automação salvas com sucesso!');
+    setTest({ status: res.success ? 'ok' : 'fail', message: res.statusText });
   };
 
-  const handleTestPing = async () => {
-    setIsTesting(true);
-    setTestResult(null);
-
-    const testPayload = {
-      event: 'teste_webhook_ping',
-      timestamp: new Date().toISOString(),
-      store: 'New Fit Suplementos',
-      sale: {
-        id: 's_test_' + Date.now(),
-        value: 499.90,
-        notes: '2x 100% Whey Dux + Creatina Creapure (TESTE)',
-        clientName: 'Aluno Teste',
-        pointsAdded: 500
-      },
-      personal: {
-        id: 'test_1',
-        name: 'Rodrigo Silva',
-        firstName: 'Rodrigo',
-        gym: 'Coliseu Gym',
-        phone: '5543998213344',
-        currentMonthPoints: 3450,
-        currentRank: 1
-      },
-      whatsappMessagePreview: 'Mensagem de teste de automação New Fit Suplementos'
-    };
-
-    try {
-      const res = await sendSaleWebhook({
-        webhookUrl: urlInput.trim(),
-        payload: testPayload
-      });
-
-      setTestResult({
-        success: res.success,
-        msg: res.success
-          ? `Sucesso: ${res.statusText}`
-          : `Aviso/Erro: ${res.statusText}`
-      });
-    } catch (e: any) {
-      setTestResult({
-        success: false,
-        msg: `Falha na requisição: ${e.message}`
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const insertVariable = (varName: string) => {
-    setTemplateInput((prev) => prev + varName);
-  };
-
-  const resetTemplate = () => {
-    if (confirm('Deseja restaurar o template de mensagem para o padrão do briefing?')) {
-      setTemplateInput(DEFAULT_WHATSAPP_TEMPLATE);
-    }
+  // Insere a variável onde o cursor está, não no fim do texto
+  const insertVariable = (tag: string) => {
+    const el = templateRef.current;
+    if (!el) return setTemplate((t) => t + tag);
+    const start = el.selectionStart ?? template.length;
+    const end = el.selectionEnd ?? template.length;
+    const next = template.slice(0, start) + tag + template.slice(end);
+    setTemplate(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + tag.length, start + tag.length);
+    });
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8 animate-in fade-in duration-200">
-      
-      {/* Header */}
-      <div className="border-b border-zinc-200/80 dark:border-white/[0.08] pb-5">
-        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2.5">
-          <Webhook className="w-6 h-6 text-[#F5A623]" />
-          <span>Configuração da Automação (n8n & WhatsApp)</span>
-        </h2>
-        <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Integração HTTP POST com fluxo n8n para inserção no Google Sheets e disparo via Evolution API
-        </p>
-      </div>
+    <div className="max-w-[720px]">
+      <ScreenHeader
+        title="Automação"
+        subtitle="n8n, planilha e WhatsApp"
+        actions={
+          onLock && (
+            <IconButton label="Bloquear" onClick={onLock} className="lg:hidden">
+              <Lock className="w-[18px] h-[18px]" />
+            </IconButton>
+          )
+        }
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LADO ESQUERDO: CONFIGURAÇÃO DE URL & TEMPLATE */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          {/* Card Webhook URL */}
-          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-2">
-                <span>Webhook Endpoint (n8n)</span>
-              </label>
-              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">HTTP POST • JSON</span>
-            </div>
-
-            <div className="space-y-2">
-              <input
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://seu-n8n.com/webhook/newfit-vendas"
-                className="w-full bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] focus:border-[#F5A623] rounded-xl px-4 py-2.5 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none font-mono"
-              />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                URL do nó de webhook do n8n que recebe o payload com a venda, dados do personal e o texto da mensagem.
-              </p>
-            </div>
-
-            {/* Botões de Ação do Webhook */}
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleTestPing}
-                disabled={isTesting}
-                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 text-zinc-800 dark:text-white rounded-xl text-xs font-semibold border border-zinc-200 dark:border-white/[0.1] transition flex items-center gap-1.5 shadow-xs"
-              >
-                <Send className="w-3.5 h-3.5 text-[#F5A623]" />
-                <span>{isTesting ? 'Disparando Ping...' : 'Testar Conexão (Ping)'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                className="px-5 py-2 bg-[#F5A623] hover:bg-[#e5971a] text-black rounded-xl text-xs font-bold transition shadow-xs"
-              >
-                Salvar Alterações
-              </button>
-            </div>
-
-            {/* Feedback do Teste */}
-            {testResult && (
-              <div
-                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-                  testResult.success
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-                    : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
-                }`}
-              >
-                {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                )}
-                <span className="font-mono">{testResult.msg}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Card Template da Mensagem */}
-          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/[0.08] pb-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-                  Template de Mensagem (WhatsApp)
-                </label>
-              </div>
-              <button
-                onClick={resetTemplate}
-                className="text-[11px] text-zinc-500 hover:text-[#F5A623] flex items-center gap-1 transition"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Restaurar Padrão
-              </button>
-            </div>
-
+      <Section
+        title="Webhook do n8n"
+        footer={
+          test.status === 'ok' && url.trim() !== settings.webhookUrl
+            ? 'Conexão ok. Toque em Salvar para as vendas usarem este endereço.'
+            : 'Recebe cada venda e repassa para a planilha e o WhatsApp do personal.'
+        }
+      >
+        <Group>
+          <div className="px-4">
+            <label htmlFor="webhook-url" className="sr-only">
+              URL do webhook
+            </label>
             <textarea
-              rows={8}
-              value={templateInput}
-              onChange={(e) => setTemplateInput(e.target.value)}
-              className="w-full bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] focus:border-[#F5A623] rounded-xl p-3.5 text-xs text-zinc-900 dark:text-zinc-200 font-mono leading-relaxed focus:outline-none select-text"
+              id="webhook-url"
+              rows={2}
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value.replace(/\s/g, ''));
+                setTest({ status: 'idle' });
+              }}
+              placeholder="https://seu-n8n.com/webhook/newfit-vendas"
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              className="w-full bg-transparent type-subhead text-label py-3 outline-none resize-none break-all font-[ui-monospace,SFMono-Regular,Menlo,monospace]"
             />
-
-            {/* Variáveis Dinâmicas Clicáveis */}
-            <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 block font-semibold">
-                Variáveis Dinâmicas (Clique para inserir):
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { tag: '{NOME}', desc: 'Primeiro nome' },
-                  { tag: '{VALOR}', desc: 'Valor R$' },
-                  { tag: '{ALUNO}', desc: 'Nome do Aluno' },
-                  { tag: '{PRODUTOS}', desc: 'Itens' },
-                  { tag: '{PONTOS}', desc: 'Pontos da venda' },
-                  { tag: '{RANKING}', desc: 'Posição (Ex: 1º)' },
-                  { tag: '{TOTAL_PONTOS}', desc: 'Acumulado no mês' },
-                  { tag: '{CUPOM}', desc: 'Código do personal' }
-                ].map((v) => (
-                  <button
-                    key={v.tag}
-                    type="button"
-                    onClick={() => insertVariable(v.tag)}
-                    className="text-[11px] font-mono bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-[#D97706] dark:text-[#F5A623] border border-zinc-200 dark:border-white/[0.08] px-2 py-1 rounded-lg transition"
-                    title={v.desc}
-                  >
-                    {v.tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Taxa de Comissão Padrão */}
-            <div className="pt-3 border-t border-zinc-100 dark:border-white/[0.08] flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-zinc-900 dark:text-white block">Taxa de Comissão Estimada</span>
-                <span className="text-[10px] text-zinc-500">Usada nos cálculos de repasse do balcão</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={commissionRate}
-                  onChange={(e) => setCommissionRate(e.target.value)}
-                  className="w-16 bg-zinc-50 dark:bg-[#0D0E11] border border-zinc-200 dark:border-white/[0.12] rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-zinc-900 dark:text-white text-center focus:outline-none"
-                />
-                <span className="text-xs font-mono text-zinc-400">%</span>
-              </div>
-            </div>
-
           </div>
+          <Row
+            onClick={test.status === 'testing' ? undefined : runTest}
+            leading={<Zap className="w-5 h-5 text-tint-text" aria-hidden />}
+            title={<span className="text-tint-text">Testar conexão</span>}
+            trailing={
+              test.status === 'testing' ? (
+                <span className="type-subhead">Testando…</span>
+              ) : test.status === 'ok' ? (
+                <StatusBadge ok okLabel="Conectado" />
+              ) : test.status === 'fail' ? (
+                <StatusBadge ok={false} failLabel="Falhou" />
+              ) : undefined
+            }
+          />
+        </Group>
+        {test.status === 'fail' && (
+          <p className="type-footnote text-red px-4 pt-1.5" role="alert">
+            {test.message}
+          </p>
+        )}
+      </Section>
 
-        </div>
+      <Section title="Mensagem do WhatsApp" footer="Toque numa variável para inseri-la onde está o cursor.">
+        <Group>
+          <div className="px-4">
+            <label htmlFor="wa-template" className="sr-only">
+              Modelo da mensagem
+            </label>
+            <textarea
+              id="wa-template"
+              ref={templateRef}
+              rows={10}
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className="w-full bg-transparent type-subhead text-label py-3 outline-none resize-y"
+            />
+          </div>
+          <div className="px-4 py-3 flex flex-wrap gap-1.5 border-t-[0.5px] border-separator/30">
+            {VARIABLES.map((v) => (
+              <button
+                key={v.tag}
+                type="button"
+                onClick={() => insertVariable(v.tag)}
+                title={v.desc}
+                className="pressable h-7 px-2.5 rounded-full bg-tint/15 text-tint-text type-footnote font-semibold"
+              >
+                {v.desc}
+              </button>
+            ))}
+          </div>
+          <Row
+            onClick={() => setConfirmReset(true)}
+            leading={<RotateCcw className="w-5 h-5 text-label-2" aria-hidden />}
+            title="Restaurar mensagem padrão"
+          />
+        </Group>
+      </Section>
 
-        {/* LADO DIREITO: PREVIEW EM TEMPO REAL & ESPECIFICAÇÃO DO PAYLOAD */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Card de Visualização do WhatsApp */}
-          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-6 shadow-xs dark:shadow-xl space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-              <span>Simulação de Mensagem no WhatsApp</span>
-            </h4>
-
-            <div className="bg-[#0b141a] border border-[#202c33] rounded-2xl p-4 shadow-inner">
-              <div className="bg-[#005c4b] text-white p-3.5 rounded-2xl rounded-tl-none text-xs leading-relaxed font-sans shadow-md whitespace-pre-line select-text border border-[#02735e]/30">
-                {templateInput
-                  .replace(/{NOME}/g, 'Rodrigo')
-                  .replace(/{VALOR}/g, 'R$ 675,80')
-                  .replace(/{ALUNO}/g, 'Matheus Oliveira')
-                  .replace(/{PRODUTOS}/g, '2x 100% Whey Dux + Creatina Creapure')
-                  .replace(/{PONTOS}/g, '676')
-                  .replace(/{RANKING}/g, '1º lugar')
-                  .replace(/{TOTAL_PONTOS}/g, '3.450')
-                  .replace(/{CUPOM}/g, 'RODRIGO10')}
-              </div>
-              <div className="flex justify-between items-center mt-2 px-1 text-[10px] text-zinc-400 font-mono">
-                <span>Evolution API</span>
-                <span>{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
+      <Section title="Prévia">
+        <Group>
+          <div className="p-3 bg-chat-bg">
+            <div className="ml-auto max-w-[92%] rounded-[14px] rounded-tr-[4px] px-3 py-2 bg-bubble-bg text-bubble-text shadow-[0_1px_0.5px_rgb(0_0_0/0.13)]">
+              <p className="type-subhead whitespace-pre-line break-words">{preview}</p>
             </div>
           </div>
+        </Group>
+      </Section>
 
-          {/* Card Arquitetura do n8n */}
-          <div className="bg-white dark:bg-[#16171B] border border-zinc-200/90 dark:border-white/[0.08] rounded-2xl p-5 shadow-xs dark:shadow-xl space-y-3 text-xs">
-            <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold uppercase tracking-wider text-[11px]">
-              <Layers className="w-4 h-4 text-[#F5A623]" />
-              <span>Fluxo no n8n Recomendado</span>
+      <Section title="Comissão" footer="Usada no resumo do balcão e na planilha de comissões.">
+        <Group>
+          <div className="ios-row flex items-center pl-4">
+            <div className="ios-row-content flex-1 flex items-center gap-3 min-h-[44px] pr-4">
+              <label htmlFor="commission" className="type-body text-label flex-1">
+                Comissão do personal
+              </label>
+              <input
+                id="commission"
+                inputMode="decimal"
+                value={commission}
+                onChange={(e) => setCommission(e.target.value.replace(/[^\d,.]/g, ''))}
+                className="w-14 bg-transparent type-body text-right tabular-nums text-label outline-none"
+              />
+              <span className="type-body text-label-2">%</span>
             </div>
-            <ol className="list-decimal list-inside space-y-1.5 text-zinc-600 dark:text-zinc-400 text-[11px]">
-              <li><strong className="text-zinc-900 dark:text-zinc-200">Webhook Node:</strong> Recebe o POST em modo JSON.</li>
-              <li><strong className="text-zinc-900 dark:text-zinc-200">Google Sheets Node:</strong> Salva timestamp, personal, aluno e valor.</li>
-              <li><strong className="text-zinc-900 dark:text-zinc-200">Evolution API Node:</strong> Envia <code className="text-[#D97706] dark:text-[#F5A623]">whatsappMessagePreview</code> para o telefone <code className="text-emerald-600 dark:text-emerald-400">personal.phone</code>.</li>
-            </ol>
           </div>
+        </Group>
+      </Section>
 
-        </div>
-
+      <div className="mb-8">
+        <Button variant="filled" size="lg" fullWidth disabled={!dirty} onClick={save}>
+          {dirty ? 'Salvar alterações' : 'Tudo salvo'}
+        </Button>
       </div>
 
+      <Section title="Aparência" footer="Automático segue o modo claro ou escuro deste aparelho. O Modo TV é sempre escuro.">
+        <SegmentedControl<Appearance>
+          label="Aparência"
+          value={appearance}
+          onChange={setAppearance}
+          options={[
+            { value: 'auto', label: 'Automático' },
+            { value: 'light', label: 'Claro' },
+            { value: 'dark', label: 'Escuro' }
+          ]}
+        />
+      </Section>
+
+      <Section title="App" footer={installFooter(install)}>
+        <Group>
+          {install.installed ? (
+            <Row
+              leading={<CheckCircle2 className="w-5 h-5 text-green" aria-hidden />}
+              title="Instalado neste aparelho"
+            />
+          ) : install.canPrompt ? (
+            <Row
+              onClick={() => install.install()}
+              leading={<Download className="w-5 h-5 text-tint-text" aria-hidden />}
+              title={<span className="text-tint-text">Instalar o app New Fit</span>}
+            />
+          ) : (
+            <Row
+              leading={
+                install.ios ? (
+                  <Share className="w-5 h-5 text-tint-text" aria-hidden />
+                ) : (
+                  <Smartphone className="w-5 h-5 text-tint-text" aria-hidden />
+                )
+              }
+              title="Adicionar à Tela de Início"
+              subtitle={
+                install.ios
+                  ? 'No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.'
+                  : 'Use o menu do navegador e escolha “Instalar app”.'
+              }
+            />
+          )}
+        </Group>
+      </Section>
+
+      <Section
+        title="Últimos envios"
+        footer="Registro deste aparelho. Toque para ver os dados enviados."
+      >
+        <Group>
+          {webhookLogs.length === 0 ? (
+            <Row title={<span className="text-label-2">Nenhum envio ainda.</span>} />
+          ) : (
+            webhookLogs.slice(0, 10).map((log) => (
+              <Row
+                key={log.id}
+                onClick={() => setOpenLog(log)}
+                title={log.personalName}
+                subtitle={`${new Date(log.timestamp).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · ${
+                  log.responsePreview || ''
+                }`}
+                trailing={<StatusBadge ok={log.status === 'success'} />}
+                chevron
+              />
+            ))
+          )}
+        </Group>
+      </Section>
+
+      <ConfirmSheet
+        open={confirmReset}
+        title="Restaurar mensagem?"
+        message="O texto atual será substituído pela mensagem padrão. Você ainda precisa salvar."
+        confirmLabel="Restaurar padrão"
+        onConfirm={() => setTemplate(DEFAULT_WHATSAPP_TEMPLATE)}
+        onClose={() => setConfirmReset(false)}
+      />
+
+      <Sheet open={!!openLog} onClose={() => setOpenLog(null)} title="Envio" size="lg">
+        {openLog && (
+          <div className="pt-2 space-y-4">
+            <Group>
+              <Row title="Personal" trailing={<span className="text-label">{openLog.personalName}</span>} />
+              <Row title="Status" trailing={<StatusBadge ok={openLog.status === 'success'} />} />
+              <Row
+                title="Resposta"
+                trailing={<span className={cx('type-footnote max-w-[60vw] sm:max-w-[320px] truncate')}>{openLog.responsePreview}</span>}
+              />
+            </Group>
+            <pre className="bg-surface rounded-card p-4 type-caption text-label overflow-x-auto font-[ui-monospace,SFMono-Regular,Menlo,monospace]">
+              {JSON.stringify(openLog.payload, null, 2)}
+            </pre>
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 };
 
+function installFooter(install: ReturnType<typeof useInstallPrompt>) {
+  if (install.installed) return 'Abre em tela cheia, como um app, direto da tela de início.';
+  return 'Instalado, o New Fit abre em tela cheia e fica a um toque na tela de início.';
+}

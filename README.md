@@ -109,6 +109,24 @@ Defina em **Vercel → Settings → Environment Variables** e faça um **Redeplo
 
 O fluxo do n8n de referência está em [`n8n/newfit-workflow.json`](n8n/newfit-workflow.json). No nó Webhook, configure **Allowed Origins (CORS)** com o domínio da Vercel.
 
+## 📱 App instalável (PWA)
+
+- **iPhone/iPad:** abra no Safari → Compartilhar → **Adicionar à Tela de Início**.
+- **Android / Chrome no computador:** botão **Instalar** na aba Automação (ou no menu do navegador).
+- Atalhos do ícone instalado: **Nova venda** (`/?tab=balcao`) e **Modo TV** (`/?tv=1`).
+- Service worker (`public/sw.js`): a página busca sempre a versão nova quando há internet e abre a última versão salva quando não há. O envio de vendas ao n8n **nunca** passa pelo cache; sem internet, a venda aparece como "não enviada" e pode ser reenviada.
+- Ao mudar a estratégia de cache, troque `VERSION` em `public/sw.js`.
+
+## 🎨 Interface
+
+Linguagem visual da Apple (iOS/macOS): fonte do sistema, cores semânticas com modo claro e escuro automático, listas agrupadas, barra de abas no celular e barra lateral no computador, painéis com arrastar para fechar e molas interrompíveis (`motion`). Respeita "reduzir movimento", "reduzir transparência" e "aumentar contraste" do aparelho. O Modo TV é sempre escuro. Em **Automação → Aparência** dá para escolher Automático (padrão), Claro ou Escuro neste aparelho.
+
+## 👥 Portal do Personal
+
+- Link: `/?portal=personal` (ou `/?portal=personal&code=CUPOM` para abrir direto no espaço de um personal). Em **Personais** há atalhos para compartilhar o link e enviar pelo WhatsApp.
+- Mostra o ranking e o "Meu espaço" (posição, pontos, vendas e extrato do cupom), sem dados do balcão.
+- **Limitação atual:** os dados vêm do `localStorage` do aparelho que abre o link. No celular do personal o portal aparece vazio (com aviso). Para funcionar de verdade, o ranking precisa ser servido por um backend (ex.: endpoint GET no n8n lendo a planilha, ou Supabase).
+
 ## 💾 Persistência e Limitações
 
 - Personais (incluindo fotos), vendas e logs ficam salvos no `localStorage` **do navegador de cada aparelho**. Use sempre o mesmo aparelho/navegador para o Balcão; o ranking oficial é a aba **Ranking do Mês** da planilha.
