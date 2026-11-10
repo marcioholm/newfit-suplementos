@@ -36,7 +36,7 @@ interface LeoCounterViewProps {
     value: number;
     notes: string;
     timestamp: string;
-  }) => Promise<void>;
+  }) => Promise<{ success: boolean; statusText: string }>;
   onResendWebhook: (sale: Sale) => Promise<void>;
   onDeleteSale: (saleId: string) => void;
   preselectedPersonalId?: string;
@@ -71,7 +71,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>(() => toLocalDateTimeInput(new Date()));
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   // Sincroniza personalId caso o selecionado fique inativo ou a lista mude
@@ -172,7 +172,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onAddSale({
+      const result = await onAddSale({
         personalId: selectedPersonal.id,
         clientName: clientName.trim() || 'Cliente Balcão',
         value: parsedValue,
@@ -180,7 +180,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
         timestamp: new Date(dateStr).toISOString()
       });
 
-      if (soundEnabled) {
+      if (soundEnabled && result.success) {
         playSuccessChime();
       }
 
@@ -190,8 +190,23 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
       setNotes('');
       setDateStr(toLocalDateTimeInput(new Date()));
 
-      setSuccessToast(`Venda de ${formatCurrencyBRL(parsedValue)} registrada e fluxo disparado com sucesso!`);
-      setTimeout(() => setSuccessToast(null), 4000);
+      if (result.success) {
+        setSuccessToast({
+          ok: true,
+          text: `Venda de ${formatCurrencyBRL(parsedValue)} registrada e enviada ao n8n.`
+        });
+        setTimeout(() => setSuccessToast(null), 4000);
+      } else {
+        // Falha fica na tela até o operador fechar: o personal NÃO foi avisado
+        setSuccessToast({
+          ok: false,
+          text: `Venda de ${formatCurrencyBRL(parsedValue)} salva neste aparelho, mas NÃO foi enviada (planilha e WhatsApp). Motivo: ${result.statusText}. Corrija e use "Reenviar" na lista abaixo.`
+        });
+        // No celular o aviso fica longe do botão de lançar: rola até ele
+        setTimeout(() => {
+          document.getElementById('sale-feedback-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+      }
     } catch (err: any) {
       alert('Erro ao registrar venda: ' + err.message);
     } finally {
@@ -366,13 +381,28 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
       </div>
 
       {/* TOAST FEEDBACK DE SUCESSO */}
-      {successToast && (
+      {successToast && successToast.ok && (
         <div className="p-4 bg-emerald-950/60 border border-emerald-500/40 rounded-2xl flex items-center justify-between gap-3 text-emerald-200 shadow-xl animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <span className="text-xs sm:text-sm font-semibold">{successToast}</span>
+            <span className="text-xs sm:text-sm font-semibold">{successToast.text}</span>
           </div>
-          <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider">Disparado</span>
+          <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider">Enviado</span>
+        </div>
+      )}
+      {successToast && !successToast.ok && (
+        <div id="sale-feedback-error" role="alert" className="p-4 bg-red-950/60 border border-red-500/50 rounded-2xl flex items-start justify-between gap-3 text-red-200 shadow-xl animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <span className="text-xs sm:text-sm font-semibold">{successToast.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessToast(null)}
+            className="text-[11px] font-semibold text-red-300 hover:text-white px-2 py-1 rounded-lg border border-red-500/40 shrink-0"
+          >
+            Fechar
+          </button>
         </div>
       )}
 

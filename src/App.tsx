@@ -165,7 +165,7 @@ export function App() {
     value: number;
     notes: string;
     timestamp: string;
-  }) => {
+  }): Promise<{ success: boolean; statusText: string }> => {
     const personal = personais.find((p) => p.id === data.personalId);
     if (!personal) throw new Error('Personal não encontrado');
 
@@ -235,6 +235,8 @@ export function App() {
       },
       ...prev.slice(0, 49) // Keep last 50 logs
     ]);
+
+    return { success: webhookResult.success, statusText: webhookResult.statusText };
   };
 
   // 4. ACTION: RESEND WEBHOOK
