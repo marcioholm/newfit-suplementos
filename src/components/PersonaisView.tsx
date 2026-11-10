@@ -407,13 +407,21 @@ const PersonalDetail: React.FC<{
             </Button>
           }
         />
-        <Row
-          href={`https://wa.me/${personal.phone}`}
-          leading={<MessageCircle className="w-5 h-5 text-green" aria-hidden />}
-          title="WhatsApp"
-          trailing={<span className="tabular-nums">{formatPhone(personal.phone)}</span>}
-          chevron
-        />
+        {personal.phone ? (
+          <Row
+            href={`https://wa.me/${personal.phone}`}
+            leading={<MessageCircle className="w-5 h-5 text-green" aria-hidden />}
+            title="WhatsApp"
+            trailing={<span className="tabular-nums">{formatPhone(personal.phone)}</span>}
+            chevron
+          />
+        ) : (
+          <Row
+            leading={<MessageCircle className="w-5 h-5 text-label-3" aria-hidden />}
+            title="WhatsApp"
+            trailing={<span className="type-footnote">Salvo na planilha</span>}
+          />
+        )}
       </Group>
     </Section>
 
@@ -431,7 +439,8 @@ const PersonalDetail: React.FC<{
     <Section title="Portal do personal" footer="Link que abre direto no espaço deste personal.">
       <Group>
         <Row
-          href={`https://wa.me/${personal.phone}?text=${encodeURIComponent(
+          // Sem telefone neste aparelho, o WhatsApp abre para escolher o contato
+          href={`https://wa.me/${personal.phone || ''}?text=${encodeURIComponent(
             `Fala, ${personal.firstName}! Acompanhe seu ranking e suas vendas na New Fit: ${portalUrl(personal)}`
           )}`}
           leading={<MessageCircle className="w-5 h-5 text-green" aria-hidden />}

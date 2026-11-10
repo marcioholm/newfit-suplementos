@@ -39,7 +39,8 @@ function toPayload(p: Personal) {
     name: p.name,
     firstName: p.firstName,
     gym: p.gym,
-    phone: p.phone,
+    // Sem telefone neste aparelho (veio da planilha): não envia, para não apagar o que está lá
+    phone: p.phone || undefined,
     code: p.code,
     active: p.active,
     avatarUrl: p.avatarUrl && p.avatarUrl.length < 45000 ? p.avatarUrl : ''

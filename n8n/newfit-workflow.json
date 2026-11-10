@@ -1,5 +1,5 @@
 {
-  "name": "New Fit - Gamificação Personais (referência)",
+  "name": "New Fit - Gamificação Personais (Webhook -> Sheets -> Evolution) v2",
   "nodes": [
     {
       "parameters": {
@@ -363,19 +363,19 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        660,
+        1100,
         200
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://SUA-EVOLUTION-API.com/message/sendText/NOME_DA_INSTANCIA",
+        "url": "https://SEU-DOMINIO-EVOLUTION/message/sendText/leo",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ number: $('Normalizar Dados').item.json.telefone, text: $('Normalizar Dados').item.json.mensagem, delay: 1200 }) }}",
+        "jsonBody": "={{ JSON.stringify({ number: $('Completar Telefone').item.json.telefone, text: $('Completar Telefone').item.json.mensagem, delay: 1200 }) }}",
         "options": {
           "timeout": 15000
         }
@@ -385,7 +385,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1320,
         200
       ],
       "retryOnFail": true,
@@ -455,7 +455,53 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        1100,
+        1540,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Personais",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "ID",
+              "lookupValue": "={{ $json.personal_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0f1c001-0008-4000-8000-000000000008",
+      "name": "Buscar Personal",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        200
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telefone oficial vem da aba Personais (pelo ID); se não achar, usa o que veio do app\nconst venda = $('Normalizar Dados').first().json;\nconst linha = $input.first().json || {};\nlet fone = String(linha['Telefone'] ?? '').replace(/\\D/g, '');\nif (fone && fone.length <= 11) fone = '55' + fone;\nreturn [{ json: { ...venda, telefone: fone || venda.telefone } }];\n"
+      },
+      "id": "a0f1c001-0009-4000-8000-000000000009",
+      "name": "Completar Telefone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
         200
       ]
     }
@@ -495,7 +541,7 @@
       "main": [
         [
           {
-            "node": "Gravar Venda no Sheets",
+            "node": "Buscar Personal",
             "type": "main",
             "index": 0
           }
@@ -518,6 +564,28 @@
         [
           {
             "node": "Atualizar Status WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Personal": {
+      "main": [
+        [
+          {
+            "node": "Completar Telefone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completar Telefone": {
+      "main": [
+        [
+          {
+            "node": "Gravar Venda no Sheets",
             "type": "main",
             "index": 0
           }
