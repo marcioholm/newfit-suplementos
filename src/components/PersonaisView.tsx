@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { CloudUpload, Copy, Eye, Loader2, Lock, MessageCircle, Pencil, Plus, Share, Users } from 'lucide-react';
+import { CloudUpload, Copy, Eye, Loader2, Lock, MessageCircle, Pencil, Plus, Share, Trash2, Users } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import { resizeImageToAvatar, avatarSrc } from '../services/imageService';
@@ -18,6 +18,7 @@ import {
   cx
 } from '../ui/components';
 import { Sheet, SheetAction } from '../ui/Sheet';
+import { ConfirmSheet } from '../ui/ConfirmSheet';
 import { useToast } from '../ui/Toast';
 import { referralText, portalUrl, shareOrCopy } from '../services/referral';
 
@@ -27,6 +28,7 @@ interface PersonaisViewProps {
   onAddPersonal: (personal: Omit<Personal, 'id' | 'createdAt'>) => void;
   onToggleActive: (id: string) => void;
   onUpdatePersonal: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
+  onDeletePersonal?: (id: string) => void;
   onLock?: () => void;
   onOpenPortal?: (code?: string) => void;
   /** IDs dos personais que já estão na planilha (null = ainda não carregou) */
@@ -136,6 +138,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
   onAddPersonal,
   onToggleActive,
   onUpdatePersonal,
+  onDeletePersonal,
   onLock,
   onOpenPortal,
   syncedIds,
@@ -147,6 +150,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingPersonal, setEditingPersonal] = useState<Personal | null>(null);
+  const [confirmDeletePersonal, setConfirmDeletePersonal] = useState<Personal | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const detail = personais.find((p) => p.id === detailId) || null;
 
@@ -347,6 +351,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
             rank={detail.active ? rankOf(detail.id) : null}
             onPhoto={(avatarUrl) => onUpdatePersonal(detail.id, { avatarUrl })}
             onEdit={() => setEditingPersonal(detail)}
+            onDelete={onDeletePersonal ? () => setConfirmDeletePersonal(detail) : undefined}
             onCopy={copy}
             onOpenPortal={onOpenPortal}
             onToggleActive={() => {
@@ -378,11 +383,34 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
         personal={editingPersonal}
         onClose={() => setEditingPersonal(null)}
         existingCodes={personais.map((p) => p.code.toUpperCase())}
+        onDelete={onDeletePersonal && editingPersonal ? () => setConfirmDeletePersonal(editingPersonal) : undefined}
         onSave={(id, changes) => {
           onUpdatePersonal(id, changes);
           setEditingPersonal(null);
           toast.show({ kind: 'success', title: 'Personal atualizado' });
         }}
+      />
+
+      {/* Confirmação de exclusão */}
+      <ConfirmSheet
+        open={!!confirmDeletePersonal}
+        title="Apagar personal?"
+        message={`O cadastro de "${confirmDeletePersonal?.name}" será removido deste aparelho. Se as vendas dele já foram registradas na planilha do Google, lembre-se de remover a linha lá também.`}
+        confirmLabel="Apagar personal"
+        onConfirm={() => {
+          if (confirmDeletePersonal && onDeletePersonal) {
+            onDeletePersonal(confirmDeletePersonal.id);
+            toast.show({
+              kind: 'info',
+              title: `${confirmDeletePersonal.firstName} apagado`,
+              message: 'Removido deste aparelho.'
+            });
+            setConfirmDeletePersonal(null);
+            setDetailId(null);
+            setEditingPersonal(null);
+          }
+        }}
+        onClose={() => setConfirmDeletePersonal(null)}
       />
     </div>
   );
@@ -396,10 +424,11 @@ const PersonalDetail: React.FC<{
   rank: number | null;
   onPhoto: (url: string | undefined) => void;
   onEdit: () => void;
+  onDelete?: () => void;
   onCopy: (text: string, what: string) => void;
   onOpenPortal?: (code?: string) => void;
   onToggleActive: () => void;
-}> = ({ personal, stats, rank, onPhoto, onEdit, onCopy, onOpenPortal, onToggleActive }) => (
+}> = ({ personal, stats, rank, onPhoto, onEdit, onDelete, onCopy, onOpenPortal, onToggleActive }) => (
   <div className="pt-2">
     <PhotoPicker name={personal.name} value={personal.avatarUrl} onChange={onPhoto} />
     <div className="text-center mt-2 mb-3">
@@ -512,9 +541,22 @@ const PersonalDetail: React.FC<{
       </Group>
     </Section>
 
-    <Button variant={personal.active ? 'destructive' : 'tinted'} size="lg" fullWidth onClick={onToggleActive}>
-      {personal.active ? 'Desativar personal' : 'Reativar personal'}
-    </Button>
+    <div className="space-y-2 pt-2">
+      <Button variant={personal.active ? 'tinted' : 'filled'} size="lg" fullWidth onClick={onToggleActive}>
+        {personal.active ? 'Desativar personal' : 'Reativar personal'}
+      </Button>
+      {onDelete && (
+        <Button
+          variant="destructive"
+          size="lg"
+          fullWidth
+          icon={<Trash2 className="w-4 h-4" />}
+          onClick={onDelete}
+        >
+          Apagar personal
+        </Button>
+      )}
+    </div>
   </div>
 );
 
@@ -673,8 +715,9 @@ const EditPersonalSheet: React.FC<{
   personal: Personal | null;
   onClose: () => void;
   existingCodes: string[];
+  onDelete?: () => void;
   onSave: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
-}> = ({ personal, onClose, existingCodes, onSave }) => {
+}> = ({ personal, onClose, existingCodes, onDelete, onSave }) => {
   const [name, setName] = useState('');
   const [gym, setGym] = useState('');
   const [phone, setPhone] = useState('');
@@ -794,6 +837,20 @@ const EditPersonalSheet: React.FC<{
               </FieldRow>
             </Group>
           </Section>
+          {onDelete && (
+            <div className="pt-6 pb-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="lg"
+                fullWidth
+                icon={<Trash2 className="w-4 h-4" />}
+                onClick={onDelete}
+              >
+                Apagar personal
+              </Button>
+            </div>
+          )}
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden disabled={!valid}>
             Salvar
           </button>

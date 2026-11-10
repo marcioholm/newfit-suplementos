@@ -71,6 +71,29 @@ export async function syncPersonais(
   }
 }
 
+export async function deletePersonalSync(
+  url: string,
+  personalId: string
+): Promise<{ success: boolean; statusText: string }> {
+  if (!url) return { success: false, statusText: 'Webhook do n8n não configurado' };
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'personal_delete', id: personalId }),
+      signal: controller.signal
+    });
+    clearTimeout(t);
+    return res.ok
+      ? { success: true, statusText: `${res.status} OK` }
+      : { success: false, statusText: `Erro HTTP ${res.status}` };
+  } catch (e: any) {
+    return { success: false, statusText: `Falha de rede / CORS: ${e?.message || 'sem resposta'}` };
+  }
+}
+
 export interface PublicData {
   personais: Personal[];
   sales: Sale[];

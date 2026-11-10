@@ -21,7 +21,7 @@ import { WebhookSettingsView } from './components/WebhookSettingsView';
 import { TvModeView } from './components/TvModeView';
 import { PinModal } from './components/PinModal';
 import { PersonalPortalView } from './components/PersonalPortalView';
-import { syncPersonais, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
+import { syncPersonais, deletePersonalSync, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
@@ -153,6 +153,10 @@ export function App() {
     readJSON<WebhookLog[]>('newfit_webhook_logs', [])
   );
 
+  const [deletedPersonalIds, setDeletedPersonalIds] = useState<string[]>(() =>
+    readJSON<string[]>('newfit_deleted_personais', [])
+  );
+
   // Sync with LocalStorage
   useEffect(() => {
     writeJSON('newfit_personais', personais);
@@ -169,6 +173,10 @@ export function App() {
   useEffect(() => {
     writeJSON('newfit_webhook_logs', webhookLogs);
   }, [webhookLogs]);
+
+  useEffect(() => {
+    writeJSON('newfit_deleted_personais', deletedPersonalIds);
+  }, [deletedPersonalIds]);
 
   // 2. UI NAVIGATION STATE
   const toast = useToast();
@@ -396,6 +404,17 @@ export function App() {
     if (current) pushPersonais([{ ...current, ...changes }]);
   };
 
+  // 6c. ACTION: DELETE PERSONAL
+  const handleDeletePersonal = (id: string) => {
+    setPersonais((prev) => prev.filter((p) => p.id !== id));
+    setSales((prev) => prev.filter((s) => s.personalId !== id));
+    setDeletedPersonalIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    if (preselectedPersonalId === id) {
+      setPreselectedPersonalId(undefined);
+    }
+    deletePersonalSync(personaisSyncUrl(settings.webhookUrl), id).catch(() => {});
+  };
+
   // 7. ACTION: TOGGLE ACTIVE
   const handleToggleActivePersonal = (id: string) => {
     const current = personais.find((p) => p.id === id);
@@ -420,8 +439,8 @@ export function App() {
   // Dados oficiais da planilha (todas as vendas, todos os aparelhos); sem eles, usa os deste aparelho
   const remote = useRemoteData(dadosUrl(settings.webhookUrl), isTvMode ? 30000 : 60000);
   const shared = remote.data && remote.data.personais.length > 0 ? remote.data : null;
-  const rankingPersonais = shared?.personais ?? personais;
-  const rankingSales = shared?.sales ?? sales;
+  const rankingPersonais = (shared?.personais ?? personais).filter((p) => !deletedPersonalIds.includes(p.id));
+  const rankingSales = (shared?.sales ?? sales).filter((s) => !deletedPersonalIds.includes(s.personalId));
   const rankingSource = shared
     ? `Atualizado às ${new Date(shared.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
     : 'Dados deste aparelho';
@@ -433,6 +452,7 @@ export function App() {
     if (!remoteList || remoteList.length === 0) return;
     setPersonais((prev) => {
       const byId = new Map(prev.map((p) => [p.id, p]));
+      const deletedSet = new Set(deletedPersonalIds);
       let changed = false;
       const merged = prev.map((local) => {
         const r = remoteList.find((x) => x.id === local.id);
@@ -460,14 +480,14 @@ export function App() {
         return local;
       });
       for (const r of remoteList) {
-        if (!byId.has(r.id)) {
+        if (!byId.has(r.id) && !deletedSet.has(r.id)) {
           merged.push({ ...r, phone: '', createdAt: r.createdAt || new Date().toISOString() });
           changed = true;
         }
       }
       return changed ? merged : prev;
     });
-  }, [remote.data]);
+  }, [remote.data, deletedPersonalIds]);
 
   // Nunca renderiza área protegida sem PIN, nem por um quadro
   const visibleTab: TabId = isUnlocked ? activeTab : 'ranking';
@@ -494,8 +514,8 @@ export function App() {
     return (
       <MotionConfig reducedMotion="user">
         <PersonalPortalView
-          personais={shared ? shared.personais : personais}
-          sales={shared ? shared.sales : sales}
+          personais={rankingPersonais}
+          sales={rankingSales}
           loading={!shared && personais.length === 0 && (remote.state.status === 'loading' || remote.state.status === 'idle')}
           failed={!shared && personais.length === 0 && remote.state.status === 'error'}
           onRetry={remote.refresh}
@@ -550,6 +570,7 @@ export function App() {
                 onSyncAll={() => pushPersonais(personais, { silent: false })}
                 onToggleActive={handleToggleActivePersonal}
                 onUpdatePersonal={handleUpdatePersonal}
+                onDeletePersonal={handleDeletePersonal}
                 onLock={lockAdmin}
                 onOpenPortal={openPortal}
               />
