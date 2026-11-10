@@ -647,3 +647,4 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({
     </div>
   );
 };
+
