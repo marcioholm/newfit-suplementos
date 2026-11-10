@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Building2, UserPlus, Trophy } from 'lucide-react';
 import { Personal, Sale, PeriodFilter, LeaderboardEntry } from '../types';
+import { avatarSrc } from '../services/imageService';
 import { formatCurrencyBRL } from '../services/webhookService';
 
 interface LeaderboardViewProps {
@@ -187,7 +188,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               <div className="flex items-start justify-between">
                 <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/[0.12] bg-zinc-800">
                   <img
-                    src={secondPlace.personal.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200'}
+                    src={avatarSrc(secondPlace.personal)}
                     alt={secondPlace.personal.name}
                     className="w-full h-full object-cover"
                   />
@@ -240,7 +241,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                 <div className="relative">
                   <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-[#F5A623] bg-zinc-800 shadow-md">
                     <img
-                      src={firstPlace.personal.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
+                      src={avatarSrc(firstPlace.personal)}
                       alt={firstPlace.personal.name}
                       className="w-full h-full object-cover"
                     />
@@ -291,7 +292,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               <div className="flex items-start justify-between">
                 <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/[0.12] bg-zinc-800">
                   <img
-                    src={thirdPlace.personal.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200'}
+                    src={avatarSrc(thirdPlace.personal)}
                     alt={thirdPlace.personal.name}
                     className="w-full h-full object-cover"
                   />
@@ -413,10 +414,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/[0.1] bg-zinc-800 shrink-0">
                                 <img
-                                  src={
-                                    entry.personal.avatarUrl ||
-                                    `https://api.dicebear.com/7.x/initials/svg?seed=${entry.personal.name}`
-                                  }
+                                  src={avatarSrc(entry.personal)}
                                   alt={entry.personal.name}
                                   className="w-full h-full object-cover"
                                 />

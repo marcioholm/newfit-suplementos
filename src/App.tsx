@@ -25,67 +25,107 @@ import {
   computeMonthStanding
 } from './services/webhookService';
 
-// Migração única v2: limpa dados de mock antigos e remove webhookUrl de exemplo
-if (typeof window !== 'undefined') {
-  const version = localStorage.getItem('newfit_data_version');
-  if (version !== '2') {
-    localStorage.removeItem('newfit_personais');
-    localStorage.removeItem('newfit_sales');
-    localStorage.removeItem('newfit_webhook_logs');
+// PIN e URL do webhook vêm das variáveis de ambiente da Vercel (ver README)
+const ADMIN_PIN = (import.meta.env.VITE_ADMIN_PIN || '').trim();
+const ENV_WEBHOOK_URL = (import.meta.env.VITE_N8N_WEBHOOK_URL || '').trim();
+const TEST_PERSONAL_ID = 'p_teste_marcio';
+const EXAMPLE_WEBHOOK_URL = 'https://n8n.webhook.newfit.com.br/webhook/venda-personal';
 
-    const savedSettings = localStorage.getItem('newfit_settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        if (parsed.webhookUrl === 'https://n8n.webhook.newfit.com.br/webhook/venda-personal') {
-          parsed.webhookUrl = '';
-          localStorage.setItem('newfit_settings', JSON.stringify(parsed));
-        }
-      } catch (e) {
-        // ignora erro de parse
-      }
+function readJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Grava no localStorage avisando se o armazenamento do navegador encheu (ex.: muitas fotos). */
+function writeJSON(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Falha ao salvar ${key} no navegador:`, e);
+    alert(
+      'Não foi possível salvar no navegador: o armazenamento está cheio. ' +
+        'Remova fotos de personais inativos ou use fotos menores.'
+    );
+  }
+}
+
+// Migrações de dados salvos no navegador
+if (typeof window !== 'undefined') {
+  try {
+    const version = localStorage.getItem('newfit_data_version');
+
+    // v2: limpa dados de demonstração antigos
+    if (version !== '2' && version !== '3') {
+      localStorage.removeItem('newfit_personais');
+      localStorage.removeItem('newfit_sales');
+      localStorage.removeItem('newfit_webhook_logs');
     }
-    localStorage.setItem('newfit_data_version', '2');
+
+    // v3: remove o personal de teste, o PIN salvo e a URL de exemplo (preserva o resto)
+    if (version !== '3') {
+      const personais = readJSON<Personal[]>('newfit_personais', []);
+      if (personais.some((p) => p.id === TEST_PERSONAL_ID)) {
+        localStorage.setItem(
+          'newfit_personais',
+          JSON.stringify(personais.filter((p) => p.id !== TEST_PERSONAL_ID))
+        );
+      }
+
+      const settings = readJSON<Record<string, unknown> | null>('newfit_settings', null);
+      if (settings) {
+        delete settings.pinCode;
+        if (settings.webhookUrl === EXAMPLE_WEBHOOK_URL) settings.webhookUrl = '';
+        localStorage.setItem('newfit_settings', JSON.stringify(settings));
+      }
+
+      localStorage.setItem('newfit_data_version', '3');
+    }
+  } catch (e) {
+    console.error('Falha na migração de dados locais:', e);
   }
 }
 
 export function App() {
   // 1. PERSISTENT STATE (LOCALSTORAGE)
-  const [personais, setPersonais] = useState<Personal[]>(() => {
-    const saved = localStorage.getItem('newfit_personais');
-    return saved ? JSON.parse(saved) : INITIAL_PERSONAIS;
-  });
+  const [personais, setPersonais] = useState<Personal[]>(() =>
+    readJSON<Personal[]>('newfit_personais', INITIAL_PERSONAIS)
+  );
 
-  const [sales, setSales] = useState<Sale[]>(() => {
-    const saved = localStorage.getItem('newfit_sales');
-    return saved ? JSON.parse(saved) : INITIAL_SALES;
-  });
+  const [sales, setSales] = useState<Sale[]>(() =>
+    readJSON<Sale[]>('newfit_sales', INITIAL_SALES)
+  );
 
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('newfit_settings');
-    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+    const saved = readJSON<Partial<AppSettings>>('newfit_settings', {});
+    const merged: AppSettings = { ...INITIAL_SETTINGS, ...saved };
+    // Aparelho novo ou URL apagada: usa a URL configurada na Vercel
+    if (!merged.webhookUrl?.trim()) merged.webhookUrl = ENV_WEBHOOK_URL;
+    return merged;
   });
 
-  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>(() => {
-    const saved = localStorage.getItem('newfit_webhook_logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>(() =>
+    readJSON<WebhookLog[]>('newfit_webhook_logs', [])
+  );
 
   // Sync with LocalStorage
   useEffect(() => {
-    localStorage.setItem('newfit_personais', JSON.stringify(personais));
+    writeJSON('newfit_personais', personais);
   }, [personais]);
 
   useEffect(() => {
-    localStorage.setItem('newfit_sales', JSON.stringify(sales));
+    writeJSON('newfit_sales', sales);
   }, [sales]);
 
   useEffect(() => {
-    localStorage.setItem('newfit_settings', JSON.stringify(settings));
+    writeJSON('newfit_settings', settings);
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('newfit_webhook_logs', JSON.stringify(webhookLogs));
+    writeJSON('newfit_webhook_logs', webhookLogs);
   }, [webhookLogs]);
 
   // 2. UI NAVIGATION STATE
@@ -252,6 +292,11 @@ export function App() {
     setPersonais((prev) => [...prev, newPersonal]);
   };
 
+  // 6b. ACTION: UPDATE PERSONAL (ex.: trocar foto)
+  const handleUpdatePersonal = (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => {
+    setPersonais((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes } : p)));
+  };
+
   // 7. ACTION: TOGGLE ACTIVE
   const handleToggleActivePersonal = (id: string) => {
     setPersonais((prev) =>
@@ -320,6 +365,7 @@ export function App() {
             sales={sales}
             onAddPersonal={handleAddPersonal}
             onToggleActive={handleToggleActivePersonal}
+            onUpdatePersonal={handleUpdatePersonal}
           />
         )}
 
@@ -343,7 +389,7 @@ export function App() {
 
       {/* MODAL PIN DO LEO */}
       <PinModal
-        correctPin={settings.pinCode || '1234'}
+        correctPin={ADMIN_PIN}
         isOpen={isPinModalOpen}
         onClose={() => setIsPinModalOpen(false)}
         onSuccess={() => {

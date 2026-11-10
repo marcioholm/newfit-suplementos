@@ -14,24 +14,12 @@ Venda de {VALOR} no seu cupom!
 New Fit Suplementos 👊`;
 
 export const INITIAL_SETTINGS: AppSettings = {
-  pinCode: '1234',
   commissionRate: 0.10, // 10%
-  webhookUrl: '',
+  webhookUrl: import.meta.env.VITE_N8N_WEBHOOK_URL?.trim() || '',
   whatsappTemplate: DEFAULT_WHATSAPP_TEMPLATE,
   storeName: 'New Fit Suplementos'
 };
 
-export const INITIAL_PERSONAIS: Personal[] = [
-  {
-    id: 'p_teste_marcio',
-    name: 'Marcio Holm',
-    firstName: 'Marcio',
-    gym: 'Teste NorthWay',
-    phone: '5542999896358',
-    code: 'MARCIO10',
-    active: true,
-    createdAt: '2026-11-09T00:00:00.000Z'
-  }
-];
+export const INITIAL_PERSONAIS: Personal[] = [];
 
 export const INITIAL_SALES: Sale[] = [];
