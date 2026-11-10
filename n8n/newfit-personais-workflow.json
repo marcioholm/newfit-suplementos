@@ -1,0 +1,183 @@
+{
+  "name": "New Fit - Personais (sincronizar com a planilha)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "newfit-personais",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "https://newfit-suplementos.vercel.app,https://newfit-suplementos-git-main-solarcom.vercel.app,http://localhost:5173"
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000001",
+      "name": "Webhook Personais",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "c2d4e6f8-1a3b-4c5d-8e9f-6e6577666974"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe { personais: [...] } (lote) ou { personal: {...} } (um só) e prepara as linhas da aba Personais\nconst body = $input.first().json.body || {};\nconst list = Array.isArray(body.personais) ? body.personais : body.personal ? [body.personal] : [];\nconst agora = DateTime.now().setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm:ss');\nconst txt = (v, max) => String(v ?? '').trim().slice(0, max);\n\nreturn list\n  .filter((p) => p && p.id && p.name)\n  .slice(0, 300)\n  .map((p) => ({\n    json: {\n      'ID': txt(p.id, 60),\n      'Nome': txt(p.name, 120),\n      'Primeiro Nome': txt(p.firstName || String(p.name).split(' ')[0], 60),\n      'Academia': txt(p.gym, 120),\n      'Telefone': String(p.phone ?? '').replace(/\\D/g, '').slice(0, 13),\n      'Cupom': txt(p.code, 30).toUpperCase(),\n      'Ativo': p.active === false ? 'não' : 'sim',\n      // Foto comprimida pelo app (data URL). Limite de célula do Sheets: 50 mil caracteres\n      'Foto': typeof p.avatarUrl === 'string' && p.avatarUrl.startsWith('data:image/') && p.avatarUrl.length < 45000 ? p.avatarUrl : '',\n      'Atualizado em': agora\n    }\n  }));\n"
+      },
+      "id": "b1000000-0000-4000-8000-000000000002",
+      "name": "Preparar Linhas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Personais",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Primeiro Nome",
+              "displayName": "Primeiro Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Academia",
+              "displayName": "Academia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Cupom",
+              "displayName": "Cupom",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ativo",
+              "displayName": "Ativo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Foto",
+              "displayName": "Foto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Atualizado em",
+              "displayName": "Atualizado em",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000003",
+      "name": "Gravar Personais",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        480,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Personais": {
+      "main": [
+        [
+          {
+            "node": "Preparar Linhas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Linhas": {
+      "main": [
+        [
+          {
+            "node": "Gravar Personais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  }
+}

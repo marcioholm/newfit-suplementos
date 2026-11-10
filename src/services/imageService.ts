@@ -68,12 +68,15 @@ export function initialsAvatar(name: string): string {
   // Só letras/números: evita quebrar o SVG com caracteres como < ou &
   const initials = raw.replace(/[^\p{L}\p{N}]/gu, '').toUpperCase() || '?';
 
+  // Estilo do app Contatos: círculo cinza em degradê com iniciais brancas (bom no claro e no escuro)
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
-    `<rect width="100" height="100" fill="#1C1E24"/>` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="#A5A9B3"/><stop offset="1" stop-color="#858994"/></linearGradient></defs>` +
+    `<rect width="100" height="100" fill="url(#g)"/>` +
     `<text x="50" y="50" dy=".35em" text-anchor="middle" ` +
-    `font-family="-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif" ` +
-    `font-size="40" font-weight="700" fill="#F5A623">${initials}</text>` +
+    `font-family="-apple-system,BlinkMacSystemFont,'SF Pro Rounded',system-ui,Helvetica,Arial,sans-serif" ` +
+    `font-size="40" font-weight="600" fill="#FFFFFF">${initials}</text>` +
     `</svg>`;
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

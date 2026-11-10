@@ -109,6 +109,38 @@ Defina em **Vercel → Settings → Environment Variables** e faça um **Redeplo
 
 O fluxo do n8n de referência está em [`n8n/newfit-workflow.json`](n8n/newfit-workflow.json). No nó Webhook, configure **Allowed Origins (CORS)** com o domínio da Vercel.
 
+## 📱 App instalável (PWA)
+
+- **iPhone/iPad:** abra no Safari → Compartilhar → **Adicionar à Tela de Início**.
+- **Android / Chrome no computador:** botão **Instalar** na aba Automação (ou no menu do navegador).
+- Atalhos do ícone instalado: **Nova venda** (`/?tab=balcao`) e **Modo TV** (`/?tv=1`).
+- Service worker (`public/sw.js`): a página busca sempre a versão nova quando há internet e abre a última versão salva quando não há. O envio de vendas ao n8n **nunca** passa pelo cache; sem internet, a venda aparece como "não enviada" e pode ser reenviada.
+- Ao mudar a estratégia de cache, troque `VERSION` em `public/sw.js`.
+
+## 🎨 Interface
+
+Linguagem visual da Apple (iOS/macOS): fonte do sistema, cores semânticas com modo claro e escuro automático, listas agrupadas, barra de abas no celular e barra lateral no computador, painéis com arrastar para fechar e molas interrompíveis (`motion`). Respeita "reduzir movimento", "reduzir transparência" e "aumentar contraste" do aparelho. O Modo TV é sempre escuro. Em **Automação → Aparência** dá para escolher Automático (padrão), Claro ou Escuro neste aparelho.
+
+## 👥 Portal do Personal
+
+- Link: `/?portal=personal` (ou `/?portal=personal&code=CUPOM` para abrir direto no espaço de um personal). Em **Personais** há atalhos para compartilhar o link e enviar pelo WhatsApp.
+- Mostra o ranking e o "Meu espaço" (posição, pontos, vendas e extrato do cupom). Não expõe telefones nem nomes de alunos.
+
+## 🔄 Dados compartilhados (planilha via n8n)
+
+Três fluxos no n8n (arquivos em [`n8n/`](n8n/)):
+
+| Fluxo | Endereço | Função |
+| :--- | :--- | :--- |
+| `newfit-workflow.json` | `POST /webhook/newfit-vendas` | Grava a venda na aba **Vendas** e avisa o personal no WhatsApp |
+| `newfit-personais-workflow.json` | `POST /webhook/newfit-personais` | Grava/atualiza personais na aba **Personais** (por ID) |
+| `newfit-dados-workflow.json` | `GET /webhook/newfit-dados` | Devolve personais e vendas públicos para o portal, o Ranking e o Modo TV |
+
+- Os endereços de personais e dados são derivados da URL de vendas (troca o último trecho). Para usar outros, defina `VITE_N8N_PERSONAIS_URL` e `VITE_N8N_DADOS_URL`.
+- Cadastrar, trocar foto ou ativar/desativar um personal envia o cadastro na hora. Em **Personais → Enviar personais ao portal** dá para subir todos os cadastros do aparelho.
+- O Ranking, o Modo TV e o portal usam os dados da planilha quando disponíveis (atualização a cada 60 s; 30 s no Modo TV) e guardam a última resposta para abrir sem internet. Sem dados da planilha, usam os deste aparelho.
+- Nos três webhooks, configure **Allowed Origins (CORS)** com o domínio da Vercel.
+
 ## 💾 Persistência e Limitações
 
 - Personais (incluindo fotos), vendas e logs ficam salvos no `localStorage` **do navegador de cada aparelho**. Use sempre o mesmo aparelho/navegador para o Balcão; o ranking oficial é a aba **Ranking do Mês** da planilha.
