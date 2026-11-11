@@ -112,32 +112,46 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  const effectivePrizes: PodiumPrizes = prizes ?? settings.prizes ?? { first: '', second: '', third: '' };
+  const effectivePrizes: PodiumPrizes = prizes ?? settings.prizes ?? { first: '', second: '', third: '', fourth: '', fifth: '' };
   const [prizeDraft, setPrizeDraft] = useState<PodiumPrizes>({
     first: effectivePrizes.first || '',
     second: effectivePrizes.second || '',
-    third: effectivePrizes.third || ''
+    third: effectivePrizes.third || '',
+    fourth: effectivePrizes.fourth || '',
+    fifth: effectivePrizes.fifth || ''
   });
 
   useEffect(() => {
     setPrizeDraft({
       first: effectivePrizes.first || '',
       second: effectivePrizes.second || '',
-      third: effectivePrizes.third || ''
+      third: effectivePrizes.third || '',
+      fourth: effectivePrizes.fourth || '',
+      fifth: effectivePrizes.fifth || ''
     });
-  }, [effectivePrizes.first, effectivePrizes.second, effectivePrizes.third]);
+  }, [
+    effectivePrizes.first,
+    effectivePrizes.second,
+    effectivePrizes.third,
+    effectivePrizes.fourth,
+    effectivePrizes.fifth
+  ]);
 
   const prizesChanged =
     prizeDraft.first.trim() !== (effectivePrizes.first || '').trim() ||
     prizeDraft.second.trim() !== (effectivePrizes.second || '').trim() ||
-    prizeDraft.third.trim() !== (effectivePrizes.third || '').trim();
+    prizeDraft.third.trim() !== (effectivePrizes.third || '').trim() ||
+    (prizeDraft.fourth || '').trim() !== (effectivePrizes.fourth || '').trim() ||
+    (prizeDraft.fifth || '').trim() !== (effectivePrizes.fifth || '').trim();
 
   const handleSavePrizes = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdatePrizes({
       first: prizeDraft.first.trim(),
       second: prizeDraft.second.trim(),
-      third: prizeDraft.third.trim()
+      third: prizeDraft.third.trim(),
+      fourth: (prizeDraft.fourth || '').trim(),
+      fifth: (prizeDraft.fifth || '').trim()
     });
   };
 
@@ -526,8 +540,8 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
           </Section>
 
           <Section
-            title="Premiação do pódio"
-            footer="Exibida nos 3 primeiros cartões do ranking. Campos em branco ficam ocultos."
+            title="Premiação do ranking"
+            footer="1º ao 3º aparecem no pódio; 4º e 5º ficam em destaque na lista. Campos em branco ficam ocultos."
           >
             <form onSubmit={handleSavePrizes} className="space-y-3">
               <Group>
@@ -535,7 +549,9 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                   [
                     { key: 'first', id: 'prize-first', label: 'Prêmio 1º Lugar', placeholder: 'Ex.: Creatina' },
                     { key: 'second', id: 'prize-second', label: 'Prêmio 2º Lugar', placeholder: 'Ex.: T-shirt' },
-                    { key: 'third', id: 'prize-third', label: 'Prêmio 3º Lugar', placeholder: 'Ex.: Shaker' }
+                    { key: 'third', id: 'prize-third', label: 'Prêmio 3º Lugar', placeholder: 'Ex.: Shaker' },
+                    { key: 'fourth', id: 'prize-fourth', label: 'Prêmio 4º Lugar', placeholder: 'Ex.: Coqueteleira' },
+                    { key: 'fifth', id: 'prize-fifth', label: 'Prêmio 5º Lugar', placeholder: 'Ex.: Barra proteica' }
                   ] as const
                 ).map((field) => (
                   <div key={field.key} className="ios-row w-full flex pl-4">
@@ -547,7 +563,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                         <BareInput
                           id={field.id}
                           type="text"
-                          value={prizeDraft[field.key]}
+                          value={prizeDraft[field.key] ?? ''}
                           onChange={(e) => setPrizeDraft((prev) => ({ ...prev, [field.key]: e.target.value }))}
                           placeholder={field.placeholder}
                         />

@@ -274,45 +274,71 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               {displayEntries.length === 0 ? (
                 <Row title={<span className="text-label-2">Nenhum resultado para “{searchTerm}”</span>} />
               ) : (
-                displayEntries.map((entry) => (
-                  <Row
-                    key={entry.personal.id}
-                    leading={
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={cx(
-                            'w-6 text-center type-subhead font-semibold tabular-nums',
-                            entry.rank === 1 ? 'text-tint-text' : 'text-label-2'
-                          )}
-                        >
-                          {entry.rank}
-                        </span>
-                        <Avatar personal={entry.personal} size={40} />
-                      </div>
-                    }
-                    title={entry.personal.name}
-                    subtitle={[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
-                    trailing={
-                      <>
-                        <span className="text-right">
-                          <span className="block type-headline tabular-nums text-label">{pts(entry.points)}</span>
-                          <span className="block type-caption text-label-2 -mt-0.5">pts</span>
-                        </span>
-                        {onSelectPersonalForSale && (
-                          <Button
-                            size="sm"
-                            variant="tinted"
-                            onClick={() => onSelectPersonalForSale(entry.personal.id)}
-                            aria-label={`Lançar venda para ${entry.personal.name}`}
-                            className="hidden sm:inline-flex"
+                displayEntries.map((entry) => {
+                  const listPrize = (
+                    entry.rank === 4 ? prizes?.fourth : entry.rank === 5 ? prizes?.fifth : ''
+                  )?.trim();
+                  const isPrizeHighlight = (entry.rank === 4 || entry.rank === 5) && Boolean(listPrize);
+                  return (
+                    <Row
+                      key={entry.personal.id}
+                      className={isPrizeHighlight ? 'bg-tint/[0.09]' : undefined}
+                      leading={
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={cx(
+                              'w-6 text-center type-subhead font-semibold tabular-nums',
+                              entry.rank === 1 || isPrizeHighlight ? 'text-tint-text' : 'text-label-2'
+                            )}
                           >
-                            Vender
-                          </Button>
+                            {entry.rank}
+                          </span>
+                          <Avatar personal={entry.personal} size={40} />
+                        </div>
+                      }
+                      trailing={
+                        <>
+                          {listPrize && (
+                            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-tint/15 px-2.5 py-0.5 type-caption font-semibold text-tint-text max-w-[180px]">
+                              <span className="shrink-0">🏆</span>
+                              <span className="truncate">{listPrize}</span>
+                            </span>
+                          )}
+                          <span className="text-right">
+                            <span className="block type-headline tabular-nums text-label">{pts(entry.points)}</span>
+                            <span className="block type-caption text-label-2 -mt-0.5">pts</span>
+                          </span>
+                          {onSelectPersonalForSale && (
+                            <Button
+                              size="sm"
+                              variant="tinted"
+                              onClick={() => onSelectPersonalForSale(entry.personal.id)}
+                              aria-label={`Lançar venda para ${entry.personal.name}`}
+                              className="hidden sm:inline-flex"
+                            >
+                              Vender
+                            </Button>
+                          )}
+                        </>
+                      }
+                    >
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="type-body text-label truncate">{entry.personal.name}</div>
+                        <div className="type-footnote text-label-2 truncate mt-0.5">
+                          {[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
+                        </div>
+                        {listPrize && (
+                          <div className="mt-1 sm:hidden">
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-tint/15 px-2 py-0.5 type-caption font-semibold text-tint-text">
+                              <span className="shrink-0">🏆</span>
+                              <span className="truncate">{listPrize}</span>
+                            </span>
+                          </div>
                         )}
-                      </>
-                    }
-                  />
-                ))
+                      </div>
+                    </Row>
+                  );
+                })
               )}
             </Group>
           </Section>

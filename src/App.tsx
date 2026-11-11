@@ -478,8 +478,8 @@ export function App() {
   );
   const activePrizes: PodiumPrizes =
     Date.now() - recentlyEditedPrizesAtRef.current < 60000
-      ? (settings.prizes ?? { first: '', second: '', third: '' })
-      : (remote.data?.prizes ?? settings.prizes ?? { first: '', second: '', third: '' });
+      ? (settings.prizes ?? { first: '', second: '', third: '', fourth: '', fifth: '' })
+      : (remote.data?.prizes ?? settings.prizes ?? { first: '', second: '', third: '', fourth: '', fifth: '' });
   const rankingSource = remote.data
     ? `Atualizado às ${new Date(remote.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
     : remoteDadosUrl

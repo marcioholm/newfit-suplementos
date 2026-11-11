@@ -153,15 +153,19 @@ function parsePublicData(json: any): PublicData {
     }));
   const rawPrizes = json?.prizes;
   const hasRemotePrizes =
-    rawPrizes && typeof rawPrizes === 'object' ||
+    (rawPrizes && typeof rawPrizes === 'object') ||
     json?.premio1 !== undefined ||
     json?.premio2 !== undefined ||
-    json?.premio3 !== undefined;
+    json?.premio3 !== undefined ||
+    json?.premio4 !== undefined ||
+    json?.premio5 !== undefined;
   const prizes: PodiumPrizes | undefined = hasRemotePrizes
     ? {
         first: String(rawPrizes?.first ?? rawPrizes?.firstPlace ?? json?.premio1 ?? '').trim(),
         second: String(rawPrizes?.second ?? rawPrizes?.secondPlace ?? json?.premio2 ?? '').trim(),
-        third: String(rawPrizes?.third ?? rawPrizes?.thirdPlace ?? json?.premio3 ?? '').trim()
+        third: String(rawPrizes?.third ?? rawPrizes?.thirdPlace ?? json?.premio3 ?? '').trim(),
+        fourth: String(rawPrizes?.fourth ?? rawPrizes?.fourthPlace ?? json?.premio4 ?? '').trim(),
+        fifth: String(rawPrizes?.fifth ?? rawPrizes?.fifthPlace ?? json?.premio5 ?? '').trim()
       }
     : undefined;
   return { personais, sales, prizes, updatedAt: String(json?.updatedAt || new Date().toISOString()) };

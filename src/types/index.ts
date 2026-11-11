@@ -50,6 +50,8 @@ export interface PodiumPrizes {
   first: string;
   second: string;
   third: string;
+  fourth?: string;
+  fifth?: string;
 }
 
 export interface AppSettings {

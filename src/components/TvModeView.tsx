@@ -229,26 +229,44 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
           {leaderboard.length > 3 && (
             <div className="flex-1 min-h-0 mt-[3vh] rounded-[24px] bg-surface overflow-hidden">
               <ol className="h-full overflow-hidden grid grid-cols-2 auto-rows-min gap-x-[2vw] px-[2vw] py-[1.5vh]">
-                {leaderboard.slice(3, 15).map((e) => (
-                  <motion.li
-                    key={e.personal.id}
-                    layout
-                    transition={spring.default}
-                    className="flex items-center gap-[1.2vw] py-[1.1vh] border-b-[0.5px] border-white/10"
-                  >
-                    <span className="w-[2.6vw] text-label-2 font-semibold tabular-nums text-[clamp(1rem,1.5vw,1.8rem)]">
-                      {e.rank}
-                    </span>
-                    <Avatar personal={e.personal} size={56} className="!w-[3vw] !h-[3vw] min-w-9 min-h-9" />
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-semibold truncate text-[clamp(1rem,1.5vw,1.8rem)]">{e.personal.name}</span>
-                      <span className="block text-label-2 truncate text-[clamp(0.8rem,1vw,1.2rem)]">
-                        {[e.personal.gym, formatCurrencyBRL(e.totalVolume)].filter(Boolean).join(' · ')}
+                {leaderboard.slice(3, 15).map((e) => {
+                  const tvPrize = (e.rank === 4 ? prizes?.fourth : e.rank === 5 ? prizes?.fifth : '')?.trim();
+                  const isPrizeHighlight = (e.rank === 4 || e.rank === 5) && Boolean(tvPrize);
+                  return (
+                    <motion.li
+                      key={e.personal.id}
+                      layout
+                      transition={spring.default}
+                      className={cx(
+                        'flex items-center gap-[1.2vw] py-[1.1vh] border-b-[0.5px] border-white/10',
+                        isPrizeHighlight && 'bg-tint/12 -mx-[1vw] px-[1vw] rounded-[14px] border-white/15'
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          'w-[2.6vw] font-semibold tabular-nums text-[clamp(1rem,1.5vw,1.8rem)]',
+                          isPrizeHighlight ? 'text-tint' : 'text-label-2'
+                        )}
+                      >
+                        {e.rank}
                       </span>
-                    </span>
-                    <span className="font-bold tabular-nums text-[clamp(1.1rem,1.7vw,2rem)]">{pts(e.points)}</span>
-                  </motion.li>
-                ))}
+                      <Avatar personal={e.personal} size={56} className="!w-[3vw] !h-[3vw] min-w-9 min-h-9" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-semibold truncate text-[clamp(1rem,1.5vw,1.8rem)]">{e.personal.name}</span>
+                        <span className="block text-label-2 truncate text-[clamp(0.8rem,1vw,1.2rem)]">
+                          {[e.personal.gym, formatCurrencyBRL(e.totalVolume)].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                      {tvPrize && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-tint/20 px-3 py-0.5 text-tint font-semibold text-[clamp(0.75rem,1vw,1.15rem)] max-w-[14vw] shrink-0">
+                          <span className="shrink-0">🏆</span>
+                          <span className="truncate">{tvPrize}</span>
+                        </span>
+                      )}
+                      <span className="font-bold tabular-nums text-[clamp(1.1rem,1.7vw,2rem)]">{pts(e.points)}</span>
+                    </motion.li>
+                  );
+                })}
               </ol>
             </div>
           )}

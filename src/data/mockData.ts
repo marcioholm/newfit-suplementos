@@ -21,7 +21,9 @@ export const INITIAL_SETTINGS: AppSettings = {
   prizes: {
     first: '',
     second: '',
-    third: ''
+    third: '',
+    fourth: '',
+    fifth: ''
   }
 };
 
