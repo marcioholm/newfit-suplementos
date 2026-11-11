@@ -332,7 +332,10 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
               <FieldRow
                 label="Personal"
                 htmlFor="sale-personal"
-                hint={selectedPersonal && `${selectedPersonal.gym} · cupom ${selectedPersonal.code}`}
+                hint={
+                  selectedPersonal &&
+                  [selectedPersonal.gym, `cupom ${selectedPersonal.code}`].filter(Boolean).join(' · ')
+                }
               >
                 <div className="relative">
                   <select

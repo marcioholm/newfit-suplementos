@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Personal, 
   Sale, 
@@ -383,6 +383,8 @@ export function App() {
     return res;
   };
 
+  const recentlyEditedRef = useRef<Map<string, number>>(new Map());
+
   // 6. ACTION: ADD PERSONAL
   const handleAddPersonal = (newPersonalData: Omit<Personal, 'id' | 'createdAt'>) => {
     const newPersonal: Personal = {
@@ -390,6 +392,7 @@ export function App() {
       id: 'p_' + Date.now(),
       createdAt: new Date().toISOString()
     };
+    recentlyEditedRef.current.set(newPersonal.id, Date.now());
     setPersonais((prev) => [...prev, newPersonal]);
     pushPersonais([newPersonal]);
   };
@@ -397,6 +400,7 @@ export function App() {
   // 6b. ACTION: UPDATE PERSONAL (ex.: trocar foto, corrigir nome)
   const handleUpdatePersonal = (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => {
     const current = personais.find((p) => p.id === id);
+    recentlyEditedRef.current.set(id, Date.now());
     setPersonais((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes } : p)));
     if (changes.name) {
       setSales((prev) => prev.map((s) => (s.personalId === id ? { ...s, personalName: changes.name! } : s)));
@@ -418,6 +422,7 @@ export function App() {
   // 7. ACTION: TOGGLE ACTIVE
   const handleToggleActivePersonal = (id: string) => {
     const current = personais.find((p) => p.id === id);
+    recentlyEditedRef.current.set(id, Date.now());
     setPersonais((prev) =>
       prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p))
     );
@@ -454,9 +459,11 @@ export function App() {
       const byId = new Map(prev.map((p) => [p.id, p]));
       const deletedSet = new Set(deletedPersonalIds);
       let changed = false;
+      const now = Date.now();
       const merged = prev.map((local) => {
         const r = remoteList.find((x) => x.id === local.id);
-        if (!r || local.pendingSync) return local;
+        const editedAt = recentlyEditedRef.current.get(local.id) ?? 0;
+        if (!r || local.pendingSync || now - editedAt < 60000) return local;
         const next: Personal = {
           ...local,
           name: r.name,

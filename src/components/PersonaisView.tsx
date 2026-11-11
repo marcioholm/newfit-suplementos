@@ -48,6 +48,7 @@ export function formatPhone(phone: string) {
 /** Valida e normaliza: só dígitos, 10–13; com 10/11 dígitos acrescenta 55. */
 function normalizePhone(raw: string): { phone?: string; error?: string } {
   let d = raw.replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('0')) d = d.slice(1);
   if (d.length < 10 || d.length > 13) return { error: 'Digite o WhatsApp com DDD, ex.: (43) 99821-3344' };
   if (d.length === 10 || d.length === 11) d = '55' + d;
   return { phone: d };
@@ -206,7 +207,7 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
         onClick={() => setDetailId(p.id)}
         leading={<Avatar personal={p} size={40} className={cx(!p.active && 'opacity-50')} />}
         title={<span className={cx(!p.active && 'text-label-2')}>{p.name}</span>}
-        subtitle={`${p.gym} · ${p.code}`}
+        subtitle={[p.gym, p.code].filter(Boolean).join(' · ')}
         trailing={<span className="type-subhead tabular-nums">{s.points.toLocaleString('pt-BR')} pts</span>}
         chevron
       />
@@ -382,7 +383,11 @@ export const PersonaisView: React.FC<PersonaisViewProps> = ({
       <EditPersonalSheet
         personal={editingPersonal}
         onClose={() => setEditingPersonal(null)}
-        existingCodes={personais.map((p) => p.code.toUpperCase())}
+        otherCodes={
+          editingPersonal
+            ? personais.filter((p) => p.id !== editingPersonal.id).map((p) => p.code.toUpperCase())
+            : []
+        }
         onDelete={onDeletePersonal && editingPersonal ? () => setConfirmDeletePersonal(editingPersonal) : undefined}
         onSave={(id, changes) => {
           onUpdatePersonal(id, changes);
@@ -434,8 +439,7 @@ const PersonalDetail: React.FC<{
     <div className="text-center mt-2 mb-3">
       <h3 className="type-title-2 text-label">{personal.name}</h3>
       <p className="type-subhead text-label-2">
-        {personal.gym}
-        {rank ? ` · ${rank}º no ranking` : !personal.active ? ' · Inativo' : ''}
+        {[personal.gym, rank ? `${rank}º no ranking` : !personal.active ? 'Inativo' : ''].filter(Boolean).join(' · ')}
       </p>
     </div>
 
@@ -568,13 +572,16 @@ const AddPersonalSheet: React.FC<{
   existingCodes: string[];
   onSave: (p: Omit<Personal, 'id' | 'createdAt'>) => void;
 }> = ({ open, onClose, existingCodes, onSave }) => {
+  const toast = useToast();
   const [name, setName] = useState('');
   const [gym, setGym] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [codeTouched, setCodeTouched] = useState(false);
   const [photo, setPhoto] = useState<string | undefined>();
+  const [nameError, setNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const reset = () => {
     setName('');
@@ -583,32 +590,62 @@ const AddPersonalSheet: React.FC<{
     setCode('');
     setCodeTouched(false);
     setPhoto(undefined);
+    setNameError(null);
     setPhoneError(null);
+    setCodeError(null);
   };
   const close = () => {
     reset();
     onClose();
   };
 
-  // Sugere o cupom a partir do primeiro nome até a pessoa editar
-  const suggestedCode = (name.trim().split(' ')[0] || '')
+  // Sugere o cupom a partir do primeiro nome, evitando colisão automática até a pessoa editar
+  const baseCode = (name.trim().split(' ')[0] || '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z]/g, '');
-  const finalCode = (codeTouched ? code : suggestedCode ? `${suggestedCode}10` : '').trim().toUpperCase();
-  const codeTaken = !!finalCode && existingCodes.includes(finalCode);
+  const autoCode = useMemo(() => {
+    if (!baseCode) return '';
+    let n = 10;
+    let candidate = `${baseCode}${n}`;
+    while (existingCodes.includes(candidate) && n < 1000) {
+      n += 10;
+      candidate = `${baseCode}${n}`;
+    }
+    return candidate;
+  }, [baseCode, existingCodes]);
 
-  const valid = name.trim() && gym.trim() && phone.trim() && finalCode && !codeTaken;
+  const finalCode = (codeTouched ? code : autoCode).trim().toUpperCase();
+  const codeTaken = !!finalCode && existingCodes.includes(finalCode);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    const { phone: normalized, error } = normalizePhone(phone);
-    if (error) {
-      setPhoneError(error);
+    if (!name.trim()) {
+      setNameError('Digite o nome completo do personal.');
+      toast.show({ kind: 'error', title: 'Informe o nome do personal' });
+      document.getElementById('p-name')?.focus();
       return;
     }
-    if (!valid || !normalized) return;
+    const { phone: normalized, error } = normalizePhone(phone);
+    if (error || !normalized) {
+      const msg = error || 'Digite o WhatsApp com DDD, ex.: (43) 99821-3344';
+      setPhoneError(msg);
+      toast.show({ kind: 'error', title: 'WhatsApp obrigatório', message: msg });
+      document.getElementById('p-phone')?.focus();
+      return;
+    }
+    if (!finalCode) {
+      setCodeError('Digite o código do cupom, ex.: ANA10.');
+      toast.show({ kind: 'error', title: 'Informe o cupom do personal' });
+      document.getElementById('p-code')?.focus();
+      return;
+    }
+    if (codeTaken) {
+      toast.show({ kind: 'error', title: 'Cupom já em uso', message: `O cupom ${finalCode} já pertence a outro personal.` });
+      document.getElementById('p-code')?.focus();
+      return;
+    }
     onSave({
       name: name.trim(),
       firstName: name.trim().split(' ')[0],
@@ -628,18 +665,18 @@ const AddPersonalSheet: React.FC<{
       title="Novo personal"
       leading={<SheetAction onClick={close}>Cancelar</SheetAction>}
       trailing={
-        <SheetAction emphasized disabled={!valid} onClick={() => submit()}>
+        <SheetAction emphasized onClick={() => submit()}>
           Salvar
         </SheetAction>
       }
     >
-      <form onSubmit={submit} className="pt-3" aria-label="Cadastrar personal">
+      <form onSubmit={submit} noValidate className="pt-3" aria-label="Cadastrar personal">
         <div className="mb-6">
           <PhotoPicker name={name} value={photo} onChange={setPhoto} />
         </div>
-        <Section footer="A foto é opcional e aparece no ranking e no Modo TV.">
+        <Section footer="A academia e a foto são opcionais.">
           <Group>
-            <FieldRow label="Nome" htmlFor="p-name">
+            <FieldRow label="Nome" htmlFor="p-name" error={nameError}>
               <BareInput
                 id="p-name"
                 data-autofocus
@@ -647,18 +684,20 @@ const AddPersonalSheet: React.FC<{
                 autoCapitalize="words"
                 autoComplete="off"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (nameError) setNameError(null);
+                }}
+                aria-invalid={!!nameError}
               />
             </FieldRow>
             <FieldRow label="Academia" htmlFor="p-gym">
               <BareInput
                 id="p-gym"
-                placeholder="Academia ou studio"
+                placeholder="Academia ou studio (opcional)"
                 autoCapitalize="words"
                 value={gym}
                 onChange={(e) => setGym(e.target.value)}
-                required
               />
             </FieldRow>
             <FieldRow label="WhatsApp" htmlFor="p-phone" error={phoneError}>
@@ -677,13 +716,12 @@ const AddPersonalSheet: React.FC<{
                 onBlur={() => phone.trim() && setPhoneError(normalizePhone(phone).error ?? null)}
                 aria-invalid={!!phoneError}
                 className="tabular-nums"
-                required
               />
             </FieldRow>
             <FieldRow
               label="Cupom"
               htmlFor="p-code"
-              error={codeTaken ? 'Este cupom já é de outro personal.' : null}
+              error={codeTaken ? 'Este cupom já é de outro personal.' : codeError}
             >
               <BareInput
                 id="p-code"
@@ -693,17 +731,19 @@ const AddPersonalSheet: React.FC<{
                 onChange={(e) => {
                   setCodeTouched(true);
                   setCode(e.target.value.toUpperCase());
+                  if (codeError) setCodeError(null);
                 }}
+                aria-invalid={codeTaken || !!codeError}
                 className="font-semibold tracking-[0.04em] uppercase"
-                required
               />
             </FieldRow>
           </Group>
         </Section>
-        {/* Enter no teclado também salva */}
-        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden disabled={!valid}>
-          Salvar
-        </button>
+        <div className="pt-6 pb-2">
+          <Button type="submit" variant="filled" size="lg" fullWidth>
+            Salvar personal
+          </Button>
+        </div>
       </form>
     </Sheet>
   );
@@ -714,48 +754,77 @@ const AddPersonalSheet: React.FC<{
 const EditPersonalSheet: React.FC<{
   personal: Personal | null;
   onClose: () => void;
-  existingCodes: string[];
+  otherCodes: string[];
   onDelete?: () => void;
   onSave: (id: string, changes: Partial<Omit<Personal, 'id' | 'createdAt'>>) => void;
-}> = ({ personal, onClose, existingCodes, onDelete, onSave }) => {
+}> = ({ personal, onClose, otherCodes, onDelete, onSave }) => {
+  const toast = useToast();
   const [name, setName] = useState('');
   const [gym, setGym] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [photo, setPhoto] = useState<string | undefined>();
+  const [nameError, setNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (personal) {
       setName(personal.name);
       setGym(personal.gym);
-      setPhone(formatPhone(personal.phone));
+      setPhone(personal.phone ? formatPhone(personal.phone) : '');
       setCode(personal.code);
       setPhoto(personal.avatarUrl);
+      setNameError(null);
       setPhoneError(null);
+      setCodeError(null);
     }
-  }, [personal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personal?.id]);
 
   const finalCode = code.trim().toUpperCase();
-  const otherCodes = personal ? existingCodes.filter((c) => c !== personal.code.toUpperCase()) : existingCodes;
   const codeTaken = !!finalCode && otherCodes.includes(finalCode);
-  const valid = !!personal && !!name.trim() && !!gym.trim() && !!phone.trim() && !!finalCode && !codeTaken;
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!personal) return;
-    const { phone: normalized, error } = normalizePhone(phone);
-    if (error) {
-      setPhoneError(error);
+    if (!name.trim()) {
+      setNameError('Digite o nome completo do personal.');
+      toast.show({ kind: 'error', title: 'Informe o nome do personal' });
+      document.getElementById('edit-p-name')?.focus();
       return;
     }
-    if (!valid || !normalized) return;
+
+    let normalizedPhone = '';
+    if (phone.trim()) {
+      const { phone: normalized, error } = normalizePhone(phone);
+      if (error || !normalized) {
+        const msg = error || 'Digite o WhatsApp com DDD, ex.: (43) 99821-3344';
+        setPhoneError(msg);
+        toast.show({ kind: 'error', title: 'WhatsApp inválido', message: msg });
+        document.getElementById('edit-p-phone')?.focus();
+        return;
+      }
+      normalizedPhone = normalized;
+    }
+
+    if (!finalCode) {
+      setCodeError('Digite o código do cupom, ex.: ANA10.');
+      toast.show({ kind: 'error', title: 'Informe o cupom' });
+      document.getElementById('edit-p-code')?.focus();
+      return;
+    }
+    if (codeTaken) {
+      toast.show({ kind: 'error', title: 'Cupom já em uso', message: `O cupom ${finalCode} já pertence a outro personal.` });
+      document.getElementById('edit-p-code')?.focus();
+      return;
+    }
 
     onSave(personal.id, {
       name: name.trim(),
       firstName: name.trim().split(' ')[0],
       gym: gym.trim(),
-      phone: normalized,
+      phone: normalizedPhone,
       code: finalCode,
       avatarUrl: photo
     });
@@ -768,19 +837,25 @@ const EditPersonalSheet: React.FC<{
       title="Editar personal"
       leading={<SheetAction onClick={onClose}>Cancelar</SheetAction>}
       trailing={
-        <SheetAction emphasized disabled={!valid} onClick={() => submit()}>
+        <SheetAction emphasized disabled={!personal} onClick={() => submit()}>
           Salvar
         </SheetAction>
       }
     >
       {personal && (
-        <form onSubmit={submit} className="pt-3" aria-label="Editar personal">
+        <form onSubmit={submit} noValidate className="pt-3" aria-label="Editar personal">
           <div className="mb-6">
             <PhotoPicker name={name} value={photo} onChange={setPhoto} />
           </div>
-          <Section footer="Corrija o nome, academia, telefone ou cupom do personal.">
+          <Section
+            footer={
+              personal.phone
+                ? 'Corrija o nome, academia, telefone ou cupom do personal.'
+                : 'Corrija os dados. O WhatsApp já está salvo na planilha — preencha só se quiser alterar.'
+            }
+          >
             <Group>
-              <FieldRow label="Nome" htmlFor="edit-p-name">
+              <FieldRow label="Nome" htmlFor="edit-p-name" error={nameError}>
                 <BareInput
                   id="edit-p-name"
                   data-autofocus
@@ -788,18 +863,20 @@ const EditPersonalSheet: React.FC<{
                   autoCapitalize="words"
                   autoComplete="off"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (nameError) setNameError(null);
+                  }}
+                  aria-invalid={!!nameError}
                 />
               </FieldRow>
               <FieldRow label="Academia" htmlFor="edit-p-gym">
                 <BareInput
                   id="edit-p-gym"
-                  placeholder="Academia ou studio"
+                  placeholder="Academia ou studio (opcional)"
                   autoCapitalize="words"
                   value={gym}
                   onChange={(e) => setGym(e.target.value)}
-                  required
                 />
               </FieldRow>
               <FieldRow label="WhatsApp" htmlFor="edit-p-phone" error={phoneError}>
@@ -807,7 +884,7 @@ const EditPersonalSheet: React.FC<{
                   id="edit-p-phone"
                   type="tel"
                   inputMode="tel"
-                  placeholder="(43) 99821-3344"
+                  placeholder={personal.phone ? '(43) 99821-3344' : 'Salvo na planilha (opcional)'}
                   autoComplete="tel"
                   value={phone}
                   onChange={(e) => {
@@ -817,28 +894,33 @@ const EditPersonalSheet: React.FC<{
                   onBlur={() => phone.trim() && setPhoneError(normalizePhone(phone).error ?? null)}
                   aria-invalid={!!phoneError}
                   className="tabular-nums"
-                  required
                 />
               </FieldRow>
               <FieldRow
                 label="Cupom"
                 htmlFor="edit-p-code"
-                error={codeTaken ? 'Este cupom já é de outro personal.' : null}
+                error={codeTaken ? 'Este cupom já é de outro personal.' : codeError}
               >
                 <BareInput
                   id="edit-p-code"
                   placeholder="ANA10"
                   autoCapitalize="characters"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    setCode(e.target.value.toUpperCase());
+                    if (codeError) setCodeError(null);
+                  }}
+                  aria-invalid={codeTaken || !!codeError}
                   className="font-semibold tracking-[0.04em] uppercase"
-                  required
                 />
               </FieldRow>
             </Group>
           </Section>
-          {onDelete && (
-            <div className="pt-6 pb-2">
+          <div className="pt-6 pb-2 space-y-2.5">
+            <Button type="submit" variant="filled" size="lg" fullWidth>
+              Salvar alterações
+            </Button>
+            {onDelete && (
               <Button
                 type="button"
                 variant="destructive"
@@ -849,11 +931,8 @@ const EditPersonalSheet: React.FC<{
               >
                 Apagar personal
               </Button>
-            </div>
-          )}
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden disabled={!valid}>
-            Salvar
-          </button>
+            )}
+          </div>
         </form>
       )}
     </Sheet>

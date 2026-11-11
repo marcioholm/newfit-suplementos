@@ -261,7 +261,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                         </div>
                       }
                       title={entry.personal.name}
-                      subtitle={`${entry.personal.gym} · ${entry.personal.code}`}
+                      subtitle={[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
                       trailing={
                         <>
                           <span className="text-right">

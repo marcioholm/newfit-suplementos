@@ -182,7 +182,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClos
                     <span className="flex-1 min-w-0">
                       <span className="block font-semibold truncate text-[clamp(1rem,1.5vw,1.8rem)]">{e.personal.name}</span>
                       <span className="block text-label-2 truncate text-[clamp(0.8rem,1vw,1.2rem)]">
-                        {e.personal.gym} · {formatCurrencyBRL(e.totalVolume)}
+                        {[e.personal.gym, formatCurrencyBRL(e.totalVolume)].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                     <span className="font-bold tabular-nums text-[clamp(1.1rem,1.7vw,2rem)]">{pts(e.points)}</span>
