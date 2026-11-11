@@ -541,7 +541,7 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
 
           <Section
             title="Premiação do ranking"
-            footer="1º ao 3º aparecem no pódio; 4º e 5º ficam em destaque na lista. Campos em branco ficam ocultos."
+            footer="Exibida nos cartões do Top 5 do ranking. Campos em branco ficam ocultos."
           >
             <form onSubmit={handleSavePrizes} className="space-y-3">
               <Group>

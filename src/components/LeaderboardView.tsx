@@ -95,16 +95,18 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
     return entries;
   }, [personais, filteredSales]);
 
+  const remainingEntries = useMemo(() => leaderboard.slice(5), [leaderboard]);
+
   const displayEntries = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return leaderboard;
-    return leaderboard.filter(
+    if (!term) return remainingEntries;
+    return remainingEntries.filter(
       (e) =>
         e.personal.name.toLowerCase().includes(term) ||
         e.personal.gym.toLowerCase().includes(term) ||
         e.personal.code.toLowerCase().includes(term)
     );
-  }, [leaderboard, searchTerm]);
+  }, [remainingEntries, searchTerm]);
 
   const periodLabel =
     period === 'month'
@@ -113,8 +115,40 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
       ? 'Últimos 7 dias'
       : 'Desde o início';
 
-  const [first, second, third] = leaderboard;
+  const [first, second, third, fourth, fifth] = leaderboard;
   const totalVolume = leaderboard.reduce((acc, e) => acc + e.totalVolume, 0);
+  const rankingFooter =
+    [
+      period !== 'all' && totalVolume > 0 ? `${formatCurrencyBRL(totalVolume)} em vendas indicadas no período.` : '',
+      sourceNote ?? ''
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined;
+
+  const renderTopCard = (entry: LeaderboardEntry | undefined, rank: number, prizeRaw?: string) => {
+    if (!entry) return null;
+    const prizeText = prizeRaw?.trim();
+    return (
+      <div key={entry.personal.id} className="rounded-[16px] bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <Avatar personal={entry.personal} size={44} />
+          <span className="type-headline tabular-nums text-label-2">{rank}º</span>
+        </div>
+        <p className="type-headline text-label truncate mt-3">{entry.personal.name}</p>
+        <p className="type-footnote text-label-2 truncate">{entry.personal.gym}</p>
+        <p className="type-title-3 tabular-nums text-label mt-2">
+          {pts(entry.points)}{' '}
+          <span className="type-footnote text-label-2 font-normal tracking-normal">pontos</span>
+        </p>
+        {prizeText && (
+          <div className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-fill/12 px-2 py-0.5 type-caption font-semibold text-label">
+            <span className="shrink-0">🏆</span>
+            <span className="truncate">{prizeText}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -219,93 +253,48 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               </div>
             )}
 
-            {(second || third) && (
-              <div className="grid grid-cols-2 gap-3">
-                {[second, third].map((entry, i) => {
-                  const prizeText = (i === 0 ? prizes?.second : prizes?.third)?.trim();
-                  return entry ? (
-                    <div key={entry.personal.id} className="rounded-[16px] bg-surface p-4">
-                      <div className="flex items-center justify-between">
-                        <Avatar personal={entry.personal} size={44} />
-                        <span className="type-headline tabular-nums text-label-2">{i + 2}º</span>
-                      </div>
-                      <p className="type-headline text-label truncate mt-3">{entry.personal.name}</p>
-                      <p className="type-footnote text-label-2 truncate">{entry.personal.gym}</p>
-                      <p className="type-title-3 tabular-nums text-label mt-2">
-                        {pts(entry.points)}{' '}
-                        <span className="type-footnote text-label-2 font-normal tracking-normal">pontos</span>
-                      </p>
-                      {prizeText && (
-                        <div className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-fill/12 px-2 py-0.5 type-caption font-semibold text-label">
-                          <span className="shrink-0">🏆</span>
-                          <span className="truncate">{prizeText}</span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div key={`empty-${i}`} />
-                  );
-                })}
+            {(second || third || fourth || fifth) && (
+              <div className="grid grid-cols-2 gap-3 items-start">
+                <div className="space-y-3">
+                  {renderTopCard(second, 2, prizes?.second)}
+                  {renderTopCard(third, 3, prizes?.third)}
+                </div>
+                <div className="space-y-3">
+                  {renderTopCard(fourth, 4, prizes?.fourth)}
+                  {renderTopCard(fifth, 5, prizes?.fifth)}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Classificação completa */}
-          <Section
-            title="Classificação"
-            footer={
-              [
-                period !== 'all' && totalVolume > 0 ? `${formatCurrencyBRL(totalVolume)} em vendas indicadas no período.` : '',
-                sourceNote ?? ''
-              ]
-                .filter(Boolean)
-                .join(' ') || undefined
-            }
-          >
-            {leaderboard.length > 5 && (
+          {/* Classificação a partir do 6º lugar */}
+          {remainingEntries.length > 0 ? (
+            <Section title="Classificação" footer={rankingFooter}>
               <SearchField
                 value={searchTerm}
                 onChange={setSearchTerm}
                 placeholder="Buscar personal, academia ou cupom"
                 className="mb-3"
               />
-            )}
-            <Group>
-              {displayEntries.length === 0 ? (
-                <Row title={<span className="text-label-2">Nenhum resultado para “{searchTerm}”</span>} />
-              ) : (
-                displayEntries.map((entry) => {
-                  const listPrize = (
-                    entry.rank === 4 ? prizes?.fourth : entry.rank === 5 ? prizes?.fifth : ''
-                  )?.trim();
-                  const isPrizeHighlight = (entry.rank === 4 || entry.rank === 5) && Boolean(listPrize);
-                  return (
+              <Group>
+                {displayEntries.length === 0 ? (
+                  <Row title={<span className="text-label-2">Nenhum resultado para “{searchTerm}”</span>} />
+                ) : (
+                  displayEntries.map((entry) => (
                     <Row
                       key={entry.personal.id}
-                      className={
-                        isPrizeHighlight ? 'bg-tint/12 shadow-[inset_3px_0_0_rgb(var(--tint))]' : undefined
-                      }
                       leading={
                         <div className="flex items-center gap-3">
-                          <span
-                            className={cx(
-                              'w-6 text-center type-subhead font-semibold tabular-nums',
-                              entry.rank === 1 || isPrizeHighlight ? 'text-tint-text' : 'text-label-2'
-                            )}
-                          >
+                          <span className="w-6 text-center type-subhead font-semibold tabular-nums text-label-2">
                             {entry.rank}
                           </span>
                           <Avatar personal={entry.personal} size={40} />
                         </div>
                       }
+                      title={entry.personal.name}
+                      subtitle={[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
                       trailing={
                         <>
-                          {listPrize && (
-                            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-tint/20 px-2.5 py-0.5 type-caption font-semibold text-tint-text max-w-[180px]">
-                              <span className="shrink-0">🏆</span>
-                              <span className="truncate">{listPrize}</span>
-                            </span>
-                          )}
                           <span className="text-right">
                             <span className="block type-headline tabular-nums text-label">{pts(entry.points)}</span>
                             <span className="block type-caption text-label-2 -mt-0.5">pts</span>
@@ -323,27 +312,14 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                           )}
                         </>
                       }
-                    >
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="type-body text-label truncate">{entry.personal.name}</div>
-                        <div className="type-footnote text-label-2 truncate mt-0.5">
-                          {[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
-                        </div>
-                        {listPrize && (
-                          <div className="mt-1 sm:hidden">
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-tint/15 px-2 py-0.5 type-caption font-semibold text-tint-text">
-                              <span className="shrink-0">🏆</span>
-                              <span className="truncate">{listPrize}</span>
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </Row>
-                  );
-                })
-              )}
-            </Group>
-          </Section>
+                    />
+                  ))
+                )}
+              </Group>
+            </Section>
+          ) : (
+            rankingFooter && <p className="type-footnote text-label-2 px-4 pb-2">{rankingFooter}</p>
+          )}
         </>
       )}
     </div>
