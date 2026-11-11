@@ -4,6 +4,7 @@ import {
   Sale, 
   AppSettings, 
   PeriodFilter, 
+  PodiumPrizes,
   WebhookLog 
 } from './types';
 import { 
@@ -21,7 +22,7 @@ import { WebhookSettingsView } from './components/WebhookSettingsView';
 import { TvModeView } from './components/TvModeView';
 import { PinModal } from './components/PinModal';
 import { PersonalPortalView } from './components/PersonalPortalView';
-import { syncPersonais, deletePersonalSync, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
+import { syncPersonais, deletePersonalSync, syncPrizes, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
@@ -385,6 +386,28 @@ export function App() {
   };
 
   const recentlyEditedRef = useRef<Map<string, number>>(new Map());
+  const recentlyEditedPrizesAtRef = useRef<number>(0);
+
+  const handleUpdatePrizes = async (prizes: PodiumPrizes) => {
+    recentlyEditedPrizesAtRef.current = Date.now();
+    setSettings((prev) => ({ ...prev, prizes }));
+    const url = personaisSyncUrl(settings.webhookUrl);
+    if (!url) {
+      toast.show({ kind: 'success', title: 'Prêmios salvos neste aparelho' });
+      return;
+    }
+    const res = await syncPrizes(url, prizes);
+    if (res.success) {
+      toast.show({ kind: 'success', title: 'Prêmios do pódio atualizados' });
+      window.setTimeout(remote.refresh, 1500);
+    } else {
+      toast.show({
+        kind: 'info',
+        title: 'Prêmios salvos neste aparelho',
+        message: `Sincronização pendente (${res.statusText}).`
+      });
+    }
+  };
 
   // 6. ACTION: ADD PERSONAL
   const handleAddPersonal = (newPersonalData: Omit<Personal, 'id' | 'createdAt'>) => {
@@ -453,6 +476,10 @@ export function App() {
   const rankingSales = (remoteDadosUrl ? (remote.data?.sales ?? []) : sales).filter(
     (s) => !deletedPersonalIds.includes(s.personalId)
   );
+  const activePrizes: PodiumPrizes =
+    Date.now() - recentlyEditedPrizesAtRef.current < 60000
+      ? (settings.prizes ?? { first: '', second: '', third: '' })
+      : (remote.data?.prizes ?? settings.prizes ?? { first: '', second: '', third: '' });
   const rankingSource = remote.data
     ? `Atualizado às ${new Date(remote.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
     : remoteDadosUrl
@@ -532,6 +559,7 @@ export function App() {
         <PersonalPortalView
           personais={rankingPersonais}
           sales={rankingSales}
+          prizes={activePrizes}
           loading={waitingRemote}
           failed={failedRemote}
           onRetry={remote.refresh}
@@ -554,6 +582,7 @@ export function App() {
               <LeaderboardView
                 personais={rankingPersonais}
                 sales={rankingSales}
+                prizes={activePrizes}
                 sourceNote={rankingSource}
                 period={period}
                 setPeriod={setPeriod}
@@ -571,6 +600,8 @@ export function App() {
                 personais={personais}
                 sales={sales}
                 settings={settings}
+                prizes={activePrizes}
+                onUpdatePrizes={handleUpdatePrizes}
                 onAddSale={handleAddSale}
                 onResendWebhook={handleResendWebhook}
                 onDeleteSale={handleDeleteSale}
@@ -612,6 +643,7 @@ export function App() {
           <TvModeView
             personais={rankingPersonais}
             sales={rankingSales}
+            prizes={activePrizes}
             loading={waitingRemote}
             failed={failedRemote}
             onRetry={remote.refresh}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Loader2, RotateCw, Share, Store, UserRound, WifiOff } from 'lucide-react';
-import { Personal, Sale, PeriodFilter } from '../types';
+import { Personal, Sale, PeriodFilter, PodiumPrizes } from '../types';
 import { formatCurrencyBRL, computeMonthStanding } from '../services/webhookService';
 import { referralText, portalUrl, shareOrCopy } from '../services/referral';
 import { LeaderboardView } from './LeaderboardView';
@@ -28,6 +28,7 @@ interface PersonalPortalViewProps {
   failed?: boolean;
   onRetry?: () => void;
   sourceNote?: string;
+  prizes?: PodiumPrizes;
 }
 
 type PortalTab = 'ranking' | 'meu-espaco';
@@ -41,7 +42,8 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({
   loading,
   failed,
   onRetry,
-  sourceNote
+  sourceNote,
+  prizes
 }) => {
   const toast = useToast();
   const active = useMemo(() => personais.filter((p) => p.active), [personais]);
@@ -150,6 +152,7 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({
                 period={period}
                 setPeriod={setPeriod}
                 sourceNote={sourceNote}
+                prizes={prizes}
                 emptyState={{ title: 'Ranking vazio', message: 'O ranking aparece aqui depois das primeiras vendas.' }}
               />
             ) : (

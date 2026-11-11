@@ -9,11 +9,12 @@ import {
   RotateCw,
   ShoppingBag,
   Trash2,
+  Trophy,
   UserPlus,
   Volume2,
   VolumeX
 } from 'lucide-react';
-import { Personal, Sale, AppSettings } from '../types';
+import { Personal, Sale, AppSettings, PodiumPrizes } from '../types';
 import {
   formatCurrencyBRL,
   buildWhatsAppMessage,
@@ -44,6 +45,8 @@ interface LeoCounterViewProps {
   personais: Personal[];
   sales: Sale[];
   settings: AppSettings;
+  prizes?: PodiumPrizes;
+  onUpdatePrizes: (prizes: PodiumPrizes) => void;
   onAddSale: (saleData: {
     personalId: string;
     clientName: string;
@@ -81,6 +84,8 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   personais,
   sales,
   settings,
+  prizes,
+  onUpdatePrizes,
   onAddSale,
   onResendWebhook,
   onDeleteSale,
@@ -106,6 +111,35 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
   const [dateStr, setDateStr] = useState(() => toLocalDateTimeInput(new Date()));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const effectivePrizes: PodiumPrizes = prizes ?? settings.prizes ?? { first: '', second: '', third: '' };
+  const [prizeDraft, setPrizeDraft] = useState<PodiumPrizes>({
+    first: effectivePrizes.first || '',
+    second: effectivePrizes.second || '',
+    third: effectivePrizes.third || ''
+  });
+
+  useEffect(() => {
+    setPrizeDraft({
+      first: effectivePrizes.first || '',
+      second: effectivePrizes.second || '',
+      third: effectivePrizes.third || ''
+    });
+  }, [effectivePrizes.first, effectivePrizes.second, effectivePrizes.third]);
+
+  const prizesChanged =
+    prizeDraft.first.trim() !== (effectivePrizes.first || '').trim() ||
+    prizeDraft.second.trim() !== (effectivePrizes.second || '').trim() ||
+    prizeDraft.third.trim() !== (effectivePrizes.third || '').trim();
+
+  const handleSavePrizes = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdatePrizes({
+      first: prizeDraft.first.trim(),
+      second: prizeDraft.second.trim(),
+      third: prizeDraft.third.trim()
+    });
+  };
 
   // Detalhe de venda e confirmação de exclusão
   const [openSaleId, setOpenSaleId] = useState<string | null>(null);
@@ -489,6 +523,49 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                 </div>
               ))}
             </div>
+          </Section>
+
+          <Section
+            title="Premiação do pódio"
+            footer="Exibida nos 3 primeiros cartões do ranking. Campos em branco ficam ocultos."
+          >
+            <form onSubmit={handleSavePrizes} className="space-y-3">
+              <Group>
+                {(
+                  [
+                    { key: 'first', id: 'prize-first', label: 'Prêmio 1º Lugar', placeholder: 'Ex.: Creatina' },
+                    { key: 'second', id: 'prize-second', label: 'Prêmio 2º Lugar', placeholder: 'Ex.: T-shirt' },
+                    { key: 'third', id: 'prize-third', label: 'Prêmio 3º Lugar', placeholder: 'Ex.: Shaker' }
+                  ] as const
+                ).map((field) => (
+                  <div key={field.key} className="ios-row w-full flex pl-4">
+                    <div className="ios-row-inner flex-1 min-w-0 flex items-center gap-3 pr-4 min-h-[48px]">
+                      <label htmlFor={field.id} className="type-body text-label w-[128px] shrink-0">
+                        {field.label}
+                      </label>
+                      <div className="flex-1 min-w-0">
+                        <BareInput
+                          id={field.id}
+                          type="text"
+                          value={prizeDraft[field.key]}
+                          onChange={(e) => setPrizeDraft((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </Group>
+              <Button
+                type="submit"
+                variant="tinted"
+                fullWidth
+                icon={<Trophy className="w-4 h-4" />}
+                disabled={!prizesChanged}
+              >
+                Salvar prêmios
+              </Button>
+            </form>
           </Section>
         </div>
       </div>

@@ -17,7 +17,12 @@ export const INITIAL_SETTINGS: AppSettings = {
   commissionRate: 0.10, // 10%
   webhookUrl: import.meta.env.VITE_N8N_WEBHOOK_URL?.trim() || '',
   whatsappTemplate: DEFAULT_WHATSAPP_TEMPLATE,
-  storeName: 'New Fit Suplementos'
+  storeName: 'New Fit Suplementos',
+  prizes: {
+    first: '',
+    second: '',
+    third: ''
+  }
 };
 
 export const INITIAL_PERSONAIS: Personal[] = [];

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Loader2, RotateCw, Trophy, WifiOff, X } from 'lucide-react';
-import { Personal, Sale } from '../types';
+import { Personal, Sale, PodiumPrizes } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import { Avatar, Button, cx } from '../ui/components';
 import { spring } from '../ui/motion';
@@ -15,6 +15,7 @@ interface TvModeViewProps {
   loading?: boolean;
   failed?: boolean;
   onRetry?: () => void;
+  prizes?: PodiumPrizes;
 }
 
 const pts = (n: number) => n.toLocaleString('pt-BR');
@@ -39,7 +40,8 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
   onClose,
   loading,
   failed,
-  onRetry
+  onRetry,
+  prizes
 }) => {
   useEffect(() => {
     const { overflow } = document.body.style;
@@ -144,6 +146,9 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
             {podium.map((entry, i) => {
               if (!entry) return <div key={`empty-${i}`} />;
               const isFirst = entry.rank === 1;
+              const prizeText = (
+                entry.rank === 1 ? prizes?.first : entry.rank === 2 ? prizes?.second : prizes?.third
+              )?.trim();
               return (
                 <motion.div
                   key={entry.personal.id}
@@ -192,9 +197,29 @@ export const TvModeView: React.FC<TvModeViewProps> = ({
                       isFirst ? 'text-[clamp(2.5rem,4.6vw,6rem)]' : 'text-[clamp(1.8rem,3vw,3.75rem)]'
                     )}
                   >
-                    {pts(entry.points)}
+                    {pts(entry.points)}{' '}
+                    <span
+                      className={cx(
+                        'font-normal tracking-normal text-label-2',
+                        isFirst ? 'text-[clamp(0.95rem,1.25vw,1.5rem)]' : 'text-[clamp(0.8rem,1vw,1.15rem)]'
+                      )}
+                    >
+                      pontos
+                    </span>
                   </p>
-                  <p className="relative text-label-2 text-[clamp(0.9rem,1.1vw,1.3rem)] mt-1">pontos</p>
+                  {prizeText && (
+                    <div
+                      className={cx(
+                        'relative mt-[1.4vh] inline-flex max-w-full items-center gap-2 rounded-full px-4 py-1.5 font-semibold',
+                        isFirst
+                          ? 'bg-tint/20 text-tint text-[clamp(0.95rem,1.25vw,1.5rem)]'
+                          : 'bg-white/12 text-white text-[clamp(0.85rem,1.1vw,1.3rem)]'
+                      )}
+                    >
+                      <span className="shrink-0">🏆</span>
+                      <span className="truncate">{prizeText}</span>
+                    </div>
+                  )}
                 </motion.div>
               );
             })}

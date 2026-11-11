@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Personal, Sale } from '../types';
+import { Personal, PodiumPrizes, Sale } from '../types';
 
 /**
  * Sincronização com a planilha via n8n.
@@ -94,9 +94,33 @@ export async function deletePersonalSync(
   }
 }
 
+export async function syncPrizes(
+  url: string,
+  prizes: PodiumPrizes
+): Promise<{ success: boolean; statusText: string }> {
+  if (!url) return { success: false, statusText: 'Webhook do n8n não configurado' };
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'prizes_sync', prizes }),
+      signal: controller.signal
+    });
+    clearTimeout(t);
+    return res.ok
+      ? { success: true, statusText: `${res.status} OK` }
+      : { success: false, statusText: `Erro HTTP ${res.status}` };
+  } catch (e: any) {
+    return { success: false, statusText: `Falha de rede / CORS: ${e?.message || 'sem resposta'}` };
+  }
+}
+
 export interface PublicData {
   personais: Personal[];
   sales: Sale[];
+  prizes?: PodiumPrizes;
   updatedAt: string;
 }
 
@@ -127,7 +151,20 @@ function parsePublicData(json: any): PublicData {
       timestamp: String(s.timestamp),
       webhookStatus: 'success' as const
     }));
-  return { personais, sales, updatedAt: String(json?.updatedAt || new Date().toISOString()) };
+  const rawPrizes = json?.prizes;
+  const hasRemotePrizes =
+    rawPrizes && typeof rawPrizes === 'object' ||
+    json?.premio1 !== undefined ||
+    json?.premio2 !== undefined ||
+    json?.premio3 !== undefined;
+  const prizes: PodiumPrizes | undefined = hasRemotePrizes
+    ? {
+        first: String(rawPrizes?.first ?? rawPrizes?.firstPlace ?? json?.premio1 ?? '').trim(),
+        second: String(rawPrizes?.second ?? rawPrizes?.secondPlace ?? json?.premio2 ?? '').trim(),
+        third: String(rawPrizes?.third ?? rawPrizes?.thirdPlace ?? json?.premio3 ?? '').trim()
+      }
+    : undefined;
+  return { personais, sales, prizes, updatedAt: String(json?.updatedAt || new Date().toISOString()) };
 }
 
 export type RemoteState =

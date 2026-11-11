@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Loader2, RotateCw, Trophy, Tv, UserPlus, WifiOff } from 'lucide-react';
-import { Personal, Sale, PeriodFilter, LeaderboardEntry } from '../types';
+import { Personal, PodiumPrizes, Sale, PeriodFilter, LeaderboardEntry } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import {
   Avatar,
@@ -31,6 +31,7 @@ interface LeaderboardViewProps {
   loading?: boolean;
   failed?: boolean;
   onRetry?: () => void;
+  prizes?: PodiumPrizes;
 }
 
 const PERIODS: { value: PeriodFilter; label: string }[] = [
@@ -53,7 +54,8 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   sourceNote,
   loading,
   failed,
-  onRetry
+  onRetry,
+  prizes
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -197,9 +199,15 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                 <div className="relative mt-5 flex items-end justify-between gap-4">
                   <div>
                     <p className="text-[2.75rem] leading-none font-bold tracking-[-0.03em] tabular-nums text-label">
-                      {pts(first.points)}
+                      {pts(first.points)}{' '}
+                      <span className="type-subhead font-normal text-label-2 tracking-normal">pontos</span>
                     </p>
-                    <p className="type-footnote text-label-2 mt-1">pontos</p>
+                    {prizes?.first?.trim() && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-tint/15 px-2.5 py-1 type-footnote font-semibold text-tint-text">
+                        <span>🏆</span>
+                        <span>{prizes.first.trim()}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="type-headline tabular-nums text-label">{formatCurrencyBRL(first.totalVolume)}</p>
@@ -213,8 +221,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
             {(second || third) && (
               <div className="grid grid-cols-2 gap-3">
-                {[second, third].map((entry, i) =>
-                  entry ? (
+                {[second, third].map((entry, i) => {
+                  const prizeText = (i === 0 ? prizes?.second : prizes?.third)?.trim();
+                  return entry ? (
                     <div key={entry.personal.id} className="rounded-[16px] bg-surface p-4">
                       <div className="flex items-center justify-between">
                         <Avatar personal={entry.personal} size={44} />
@@ -223,13 +232,20 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                       <p className="type-headline text-label truncate mt-3">{entry.personal.name}</p>
                       <p className="type-footnote text-label-2 truncate">{entry.personal.gym}</p>
                       <p className="type-title-3 tabular-nums text-label mt-2">
-                        {pts(entry.points)} <span className="type-footnote text-label-2 font-normal">pts</span>
+                        {pts(entry.points)}{' '}
+                        <span className="type-footnote text-label-2 font-normal tracking-normal">pontos</span>
                       </p>
+                      {prizeText && (
+                        <div className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-fill/12 px-2 py-0.5 type-caption font-semibold text-label">
+                          <span className="shrink-0">🏆</span>
+                          <span className="truncate">{prizeText}</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div key={`empty-${i}`} />
-                  )
-                )}
+                  );
+                })}
               </div>
             )}
           </div>

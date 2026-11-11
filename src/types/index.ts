@@ -46,9 +46,16 @@ export interface LeaderboardEntry {
   points: number;
 }
 
+export interface PodiumPrizes {
+  first: string;
+  second: string;
+  third: string;
+}
+
 export interface AppSettings {
   commissionRate: number; // 0.10 para 10%
   webhookUrl: string; // URL do n8n
   whatsappTemplate: string;
   storeName: string;
+  prizes?: PodiumPrizes;
 }
