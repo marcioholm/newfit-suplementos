@@ -22,7 +22,7 @@ import { WebhookSettingsView } from './components/WebhookSettingsView';
 import { TvModeView } from './components/TvModeView';
 import { PinModal } from './components/PinModal';
 import { PersonalPortalView } from './components/PersonalPortalView';
-import { syncPersonais, deletePersonalSync, syncPrizes, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
+import { syncPersonais, deletePersonalSync, syncSettings, personaisSyncUrl, dadosUrl, useRemoteData } from './services/syncService';
 import { 
   buildWhatsAppMessage, 
   buildWebhookPayload, 
@@ -387,27 +387,56 @@ export function App() {
 
   const recentlyEditedRef = useRef<Map<string, number>>(new Map());
   const recentlyEditedPrizesAtRef = useRef<number>(0);
+  const recentlyEditedSettingsAtRef = useRef<number>(0);
 
-  const handleUpdatePrizes = async (prizes: PodiumPrizes) => {
-    recentlyEditedPrizesAtRef.current = Date.now();
-    setSettings((prev) => ({ ...prev, prizes }));
-    const url = personaisSyncUrl(settings.webhookUrl);
+  const handleUpdateSettings = async (newVals: Partial<AppSettings>) => {
+    const next: AppSettings = { ...settings, ...newVals };
+    recentlyEditedSettingsAtRef.current = Date.now();
+    if (newVals.prizes !== undefined) recentlyEditedPrizesAtRef.current = Date.now();
+    setSettings(next);
+
+    const hasSharedChanges =
+      newVals.prizes !== undefined ||
+      newVals.whatsappTemplate !== undefined ||
+      newVals.commissionRate !== undefined ||
+      newVals.storeName !== undefined;
+    if (!hasSharedChanges) return;
+
+    const url = personaisSyncUrl(next.webhookUrl);
     if (!url) {
-      toast.show({ kind: 'success', title: 'Prêmios salvos neste aparelho' });
+      toast.show({ kind: 'success', title: 'Ajustes salvos neste aparelho' });
       return;
     }
-    const res = await syncPrizes(url, prizes);
+
+    const res = await syncSettings(url, {
+      prizes: next.prizes,
+      whatsappTemplate: next.whatsappTemplate,
+      commissionRate: next.commissionRate,
+      storeName: next.storeName
+    });
+
     if (res.success) {
-      toast.show({ kind: 'success', title: 'Prêmios do pódio atualizados' });
+      const backendSupportsConfigSync = Boolean(remote.data?.prizes || remote.data?.settings);
+      if (backendSupportsConfigSync) {
+        toast.show({ kind: 'success', title: 'Alterações salvas e sincronizadas' });
+      } else {
+        toast.show({
+          kind: 'info',
+          title: 'Salvo neste aparelho',
+          message: 'Para aparecer em outros aparelhos, importe os fluxos atualizados da pasta n8n/ e crie a aba Config na planilha.'
+        });
+      }
       window.setTimeout(remote.refresh, 1500);
     } else {
       toast.show({
         kind: 'info',
-        title: 'Prêmios salvos neste aparelho',
+        title: 'Salvo neste aparelho',
         message: `Sincronização pendente (${res.statusText}).`
       });
     }
   };
+
+  const handleUpdatePrizes = (prizes: PodiumPrizes) => handleUpdateSettings({ prizes });
 
   // 6. ACTION: ADD PERSONAL
   const handleAddPersonal = (newPersonalData: Omit<Personal, 'id' | 'createdAt'>) => {
@@ -434,13 +463,18 @@ export function App() {
 
   // 6c. ACTION: DELETE PERSONAL
   const handleDeletePersonal = (id: string) => {
+    const current = personais.find((p) => p.id === id);
     setPersonais((prev) => prev.filter((p) => p.id !== id));
     setSales((prev) => prev.filter((s) => s.personalId !== id));
     setDeletedPersonalIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     if (preselectedPersonalId === id) {
       setPreselectedPersonalId(undefined);
     }
-    deletePersonalSync(personaisSyncUrl(settings.webhookUrl), id).catch(() => {});
+    const syncUrl = personaisSyncUrl(settings.webhookUrl);
+    if (current) {
+      syncPersonais(syncUrl, [{ ...current, active: false }]).catch(() => {});
+    }
+    deletePersonalSync(syncUrl, id).catch(() => {});
   };
 
   // 7. ACTION: TOGGLE ACTIVE
@@ -531,6 +565,51 @@ export function App() {
       return changed ? merged : prev;
     });
   }, [remote.data, deletedPersonalIds]);
+
+  // Sincroniza prêmios, mensagem predefinida e comissão vindos da planilha para este aparelho
+  useEffect(() => {
+    const remotePrizes = remote.data?.prizes;
+    const remoteSettings = remote.data?.settings;
+    if (!remotePrizes && !remoteSettings) return;
+    if (Date.now() - recentlyEditedSettingsAtRef.current < 60000) return;
+
+    setSettings((prev) => {
+      let changed = false;
+      const next: AppSettings = { ...prev };
+
+      if (remotePrizes) {
+        const p = prev.prizes ?? { first: '', second: '', third: '', fourth: '', fifth: '' };
+        if (
+          (p.first || '') !== remotePrizes.first ||
+          (p.second || '') !== remotePrizes.second ||
+          (p.third || '') !== remotePrizes.third ||
+          (p.fourth || '') !== (remotePrizes.fourth || '') ||
+          (p.fifth || '') !== (remotePrizes.fifth || '')
+        ) {
+          next.prizes = { ...remotePrizes };
+          changed = true;
+        }
+      }
+
+      if (remoteSettings?.whatsappTemplate && remoteSettings.whatsappTemplate !== prev.whatsappTemplate) {
+        next.whatsappTemplate = remoteSettings.whatsappTemplate;
+        changed = true;
+      }
+      if (
+        typeof remoteSettings?.commissionRate === 'number' &&
+        remoteSettings.commissionRate !== prev.commissionRate
+      ) {
+        next.commissionRate = remoteSettings.commissionRate;
+        changed = true;
+      }
+      if (remoteSettings?.storeName && remoteSettings.storeName !== prev.storeName) {
+        next.storeName = remoteSettings.storeName;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [remote.data]);
 
   // Nunca renderiza área protegida sem PIN, nem por um quadro
   const visibleTab: TabId = isUnlocked ? activeTab : 'ranking';
@@ -629,7 +708,7 @@ export function App() {
             {visibleTab === 'webhook' && (
               <WebhookSettingsView
                 settings={settings}
-                onUpdateSettings={(newVals) => setSettings((prev) => ({ ...prev, ...newVals }))}
+                onUpdateSettings={handleUpdateSettings}
                 webhookLogs={webhookLogs}
                 onLock={lockAdmin}
               />

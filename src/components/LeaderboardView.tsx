@@ -282,7 +282,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                   return (
                     <Row
                       key={entry.personal.id}
-                      className={isPrizeHighlight ? 'bg-tint/[0.09]' : undefined}
+                      className={
+                        isPrizeHighlight ? 'bg-tint/12 shadow-[inset_3px_0_0_rgb(var(--tint))]' : undefined
+                      }
                       leading={
                         <div className="flex items-center gap-3">
                           <span
@@ -299,7 +301,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                       trailing={
                         <>
                           {listPrize && (
-                            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-tint/15 px-2.5 py-0.5 type-caption font-semibold text-tint-text max-w-[180px]">
+                            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-tint/20 px-2.5 py-0.5 type-caption font-semibold text-tint-text max-w-[180px]">
                               <span className="shrink-0">🏆</span>
                               <span className="truncate">{listPrize}</span>
                             </span>

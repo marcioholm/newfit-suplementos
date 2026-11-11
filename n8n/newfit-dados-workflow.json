@@ -72,14 +72,41 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta os dados públicos do portal/ranking: sem telefones e sem nomes de alunos\nconst rows = (node) => $(node).all().map((i) => i.json).filter((r) => r && Object.keys(r).length);\n\nconst num = (v) => {\n  if (typeof v === 'number') return v;\n  const s = String(v ?? '').replace(/[^\\d,.-]/g, '');\n  if (!s) return 0;\n  return s.includes(',') ? Number(s.replace(/\\./g, '').replace(',', '.')) || 0 : Number(s) || 0;\n};\n\n// \"09/11/2026 14:04:00\" (horário de Brasília) -> ISO\nconst toISO = (v) => {\n  const m = String(v ?? '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})[ T](\\d{2}):(\\d{2})(?::(\\d{2}))?/);\n  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}-03:00`;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n};\n\nconst personais = rows('Ler Personais')\n  .filter((r) => r['ID'] && r['Nome'])\n  .map((r) => {\n    const ativo = String(r['Ativo'] ?? 'sim').toLowerCase();\n    const foto = String(r['Foto'] ?? '');\n    return {\n      id: String(r['ID']),\n      name: String(r['Nome']),\n      firstName: String(r['Primeiro Nome'] || String(r['Nome']).split(' ')[0]),\n      gym: String(r['Academia'] ?? ''),\n      code: String(r['Cupom'] ?? ''),\n      active: !['não', 'nao', 'false', '0'].includes(ativo),\n      avatarUrl: foto.startsWith('data:image/') ? foto : undefined\n    };\n  });\n\nconst ids = new Set(personais.map((p) => p.id));\n\nconst sales = rows('Ler Vendas')\n  .filter((r) => r['ID Venda'] && ids.has(String(r['Personal ID'])))\n  .map((r) => ({\n    id: String(r['ID Venda']),\n    personalId: String(r['Personal ID']),\n    personalName: String(r['Personal'] ?? ''),\n    value: num(r['Valor (R$)']),\n    pointsAdded: Math.round(num(r['Pontos'])),\n    notes: String(r['Itens'] ?? ''),\n    timestamp: toISO(r['Data/Hora'])\n  }))\n  .filter((s) => s.timestamp);\n\nreturn [{ json: { updatedAt: new Date().toISOString(), personais, sales } }];\n"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-4000-8000-000000000006",
+      "name": "Ler Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta os dados públicos do portal/ranking: sem telefones e sem nomes de alunos\nconst rows = (node) => {\n  try {\n    return $(node).all().map((i) => i.json).filter((r) => r && Object.keys(r).length && !r.error);\n  } catch {\n    return [];\n  }\n};\n\nconst num = (v) => {\n  if (typeof v === 'number') return v;\n  const s = String(v ?? '').replace(/[^\\d,.-]/g, '');\n  if (!s) return 0;\n  return s.includes(',') ? Number(s.replace(/\\./g, '').replace(',', '.')) || 0 : Number(s) || 0;\n};\n\n// \"09/11/2026 14:04:00\" (horário de Brasília) -> ISO\nconst toISO = (v) => {\n  const m = String(v ?? '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})[ T](\\d{2}):(\\d{2})(?::(\\d{2}))?/);\n  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}-03:00`;\n  const d = new Date(v);\n  return isNaN(d.getTime()) ? null : d.toISOString();\n};\n\nconst personais = rows('Ler Personais')\n  .filter((r) => r['ID'] && r['Nome'])\n  .map((r) => {\n    const ativo = String(r['Ativo'] ?? 'sim').toLowerCase();\n    const foto = String(r['Foto'] ?? '');\n    return {\n      id: String(r['ID']),\n      name: String(r['Nome']),\n      firstName: String(r['Primeiro Nome'] || String(r['Nome']).split(' ')[0]),\n      gym: String(r['Academia'] ?? ''),\n      code: String(r['Cupom'] ?? ''),\n      active: !['não', 'nao', 'false', '0'].includes(ativo),\n      avatarUrl: foto.startsWith('data:image/') ? foto : undefined\n    };\n  });\n\nconst ids = new Set(personais.map((p) => p.id));\n\nconst sales = rows('Ler Vendas')\n  .filter((r) => r['ID Venda'] && ids.has(String(r['Personal ID'])))\n  .map((r) => ({\n    id: String(r['ID Venda']),\n    personalId: String(r['Personal ID']),\n    personalName: String(r['Personal'] ?? ''),\n    value: num(r['Valor (R$)']),\n    pointsAdded: Math.round(num(r['Pontos'])),\n    notes: String(r['Itens'] ?? ''),\n    timestamp: toISO(r['Data/Hora'])\n  }))\n  .filter((s) => s.timestamp);\n\nconst cfg = new Map();\nfor (const r of rows('Ler Config')) {\n  const k = String(r['Chave'] ?? '').trim();\n  if (k) cfg.set(k, r['Valor'] ?? '');\n}\n\nlet prizes;\nif (cfg.has('prizes')) {\n  try {\n    const parsed = JSON.parse(String(cfg.get('prizes') || '{}'));\n    if (parsed && typeof parsed === 'object') prizes = parsed;\n  } catch {}\n}\n\nconst settings = {};\nif (cfg.has('whatsappTemplate') && String(cfg.get('whatsappTemplate') || '')) {\n  settings.whatsappTemplate = String(cfg.get('whatsappTemplate'));\n}\nif (cfg.has('commissionRate') && String(cfg.get('commissionRate') ?? '') !== '') {\n  const rate = num(cfg.get('commissionRate'));\n  if (!isNaN(rate) && rate >= 0) settings.commissionRate = rate;\n}\nif (cfg.has('storeName') && String(cfg.get('storeName') || '').trim()) {\n  settings.storeName = String(cfg.get('storeName')).trim();\n}\n\nconst payload = { updatedAt: new Date().toISOString(), personais, sales };\nif (prizes) payload.prizes = prizes;\nif (Object.keys(settings).length > 0) payload.settings = settings;\n\nreturn [{ json: payload }];\n"
       },
       "id": "d1000000-0000-4000-8000-000000000004",
       "name": "Montar Dados",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
+        960,
         300
       ]
     },
@@ -103,7 +130,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        960,
+        1200,
         300
       ]
     }
@@ -133,6 +160,17 @@
       ]
     },
     "Ler Vendas": {
+      "main": [
+        [
+          {
+            "node": "Ler Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Config": {
       "main": [
         [
           {

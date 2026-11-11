@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, Lock, RotateCcw, Share, Smartphone, Zap } from 'lucide-react';
 import { AppSettings, WebhookLog } from '../types';
 import { DEFAULT_WHATSAPP_TEMPLATE } from '../data/mockData';
@@ -65,14 +65,27 @@ export const WebhookSettingsView: React.FC<WebhookSettingsViewProps> = ({
   const dirty =
     url.trim() !== settings.webhookUrl || template !== settings.whatsappTemplate || commissionRate !== settings.commissionRate;
 
+  // Atualiza os campos locais quando chegarem ajustes sincronizados da planilha (sem sobrescrever edição em andamento)
+  useEffect(() => {
+    if (!dirty) {
+      setUrl(settings.webhookUrl);
+      setTemplate(settings.whatsappTemplate);
+      setCommission(String(Math.round(settings.commissionRate * 100)));
+    }
+  }, [settings.webhookUrl, settings.whatsappTemplate, settings.commissionRate, dirty]);
+
   const preview = useMemo(
     () => Object.entries(SAMPLE).reduce((txt, [tag, val]) => txt.split(tag).join(val), template),
     [template]
   );
 
   const save = () => {
+    const templateOrCommissionChanged =
+      template !== settings.whatsappTemplate || (commissionRate || 0.1) !== settings.commissionRate;
     onUpdateSettings({ webhookUrl: url.trim(), whatsappTemplate: template, commissionRate: commissionRate || 0.1 });
-    toast.show({ kind: 'success', title: 'Ajustes salvos' });
+    if (!templateOrCommissionChanged) {
+      toast.show({ kind: 'success', title: 'URL do webhook salva neste aparelho' });
+    }
   };
 
   const runTest = async () => {

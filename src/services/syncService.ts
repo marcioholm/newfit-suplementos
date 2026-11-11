@@ -98,6 +98,20 @@ export async function syncPrizes(
   url: string,
   prizes: PodiumPrizes
 ): Promise<{ success: boolean; statusText: string }> {
+  return syncSettings(url, { prizes });
+}
+
+export interface SyncedSettingsPayload {
+  prizes?: PodiumPrizes;
+  whatsappTemplate?: string;
+  commissionRate?: number;
+  storeName?: string;
+}
+
+export async function syncSettings(
+  url: string,
+  settings: SyncedSettingsPayload
+): Promise<{ success: boolean; statusText: string }> {
   if (!url) return { success: false, statusText: 'Webhook do n8n não configurado' };
   try {
     const controller = new AbortController();
@@ -105,7 +119,7 @@ export async function syncPrizes(
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'prizes_sync', prizes }),
+      body: JSON.stringify({ event: 'settings_sync', ...settings }),
       signal: controller.signal
     });
     clearTimeout(t);
@@ -121,6 +135,7 @@ export interface PublicData {
   personais: Personal[];
   sales: Sale[];
   prizes?: PodiumPrizes;
+  settings?: Omit<SyncedSettingsPayload, 'prizes'>;
   updatedAt: string;
 }
 
@@ -151,7 +166,7 @@ function parsePublicData(json: any): PublicData {
       timestamp: String(s.timestamp),
       webhookStatus: 'success' as const
     }));
-  const rawPrizes = json?.prizes;
+  const rawPrizes = json?.prizes ?? json?.settings?.prizes;
   const hasRemotePrizes =
     (rawPrizes && typeof rawPrizes === 'object') ||
     json?.premio1 !== undefined ||
@@ -168,7 +183,33 @@ function parsePublicData(json: any): PublicData {
         fifth: String(rawPrizes?.fifth ?? rawPrizes?.fifthPlace ?? json?.premio5 ?? '').trim()
       }
     : undefined;
-  return { personais, sales, prizes, updatedAt: String(json?.updatedAt || new Date().toISOString()) };
+
+  const rawSettings = json?.settings;
+  const rawTemplate = rawSettings?.whatsappTemplate ?? json?.whatsappTemplate;
+  const rawCommission = rawSettings?.commissionRate ?? json?.commissionRate;
+  const rawStoreName = rawSettings?.storeName ?? json?.storeName;
+  const hasRemoteSettings =
+    rawTemplate !== undefined || rawCommission !== undefined || rawStoreName !== undefined;
+  const settings: PublicData['settings'] = hasRemoteSettings
+    ? {
+        whatsappTemplate: typeof rawTemplate === 'string' && rawTemplate ? rawTemplate : undefined,
+        commissionRate:
+          typeof rawCommission === 'number' && !Number.isNaN(rawCommission)
+            ? rawCommission
+            : typeof rawCommission === 'string' && rawCommission.trim() !== '' && !Number.isNaN(Number(rawCommission))
+            ? Number(rawCommission)
+            : undefined,
+        storeName: typeof rawStoreName === 'string' && rawStoreName.trim() ? rawStoreName.trim() : undefined
+      }
+    : undefined;
+
+  return {
+    personais,
+    sales,
+    prizes,
+    settings,
+    updatedAt: String(json?.updatedAt || new Date().toISOString())
+  };
 }
 
 export type RemoteState =

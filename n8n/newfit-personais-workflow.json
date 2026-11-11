@@ -22,6 +22,123 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cfg-cond-1",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "settings_sync",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cfg-cond-2",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "prizes_sync",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "b1000000-0000-4000-8000-000000000004",
+      "name": "É configuração?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Grava prêmios, mensagem predefinida e comissão na aba Config (Chave / Valor)\nconst body = $input.first().json.body || {};\nconst agora = DateTime.now().setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm:ss');\nconst rows = [];\n\nif (body.prizes && typeof body.prizes === 'object') {\n  rows.push({ json: { Chave: 'prizes', Valor: JSON.stringify(body.prizes), 'Atualizado em': agora } });\n}\nif (typeof body.whatsappTemplate === 'string') {\n  rows.push({ json: { Chave: 'whatsappTemplate', Valor: body.whatsappTemplate, 'Atualizado em': agora } });\n}\nif (typeof body.commissionRate === 'number' && !isNaN(body.commissionRate)) {\n  rows.push({ json: { Chave: 'commissionRate', Valor: String(body.commissionRate), 'Atualizado em': agora } });\n}\nif (typeof body.storeName === 'string' && body.storeName.trim()) {\n  rows.push({ json: { Chave: 'storeName', Valor: body.storeName.trim(), 'Atualizado em': agora } });\n}\n\nreturn rows;\n"
+      },
+      "id": "b1000000-0000-4000-8000-000000000005",
+      "name": "Preparar Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1PC6n7A6FbSA3KliQWyviSK7YSeTzEjSPplkPMVCsdbg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Config",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Chave"
+          ],
+          "schema": [
+            {
+              "id": "Chave",
+              "displayName": "Chave",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Valor",
+              "displayName": "Valor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Atualizado em",
+              "displayName": "Atualizado em",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "b1000000-0000-4000-8000-000000000006",
+      "name": "Gravar Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        140
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "// Recebe { personais: [...] } (lote) ou { personal: {...} } (um só) e prepara as linhas da aba Personais\nconst body = $input.first().json.body || {};\nconst list = Array.isArray(body.personais) ? body.personais : body.personal ? [body.personal] : [];\nconst agora = DateTime.now().setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm:ss');\nconst txt = (v, max) => String(v ?? '').trim().slice(0, max);\n\nreturn list\n  .filter((p) => p && p.id && p.name)\n  .slice(0, 300)\n  .map((p) => {\n    const row = {\n      'ID': txt(p.id, 60),\n      'Nome': txt(p.name, 120),\n      'Primeiro Nome': txt(p.firstName || String(p.name).split(' ')[0], 60),\n      'Academia': txt(p.gym, 120),\n      'Cupom': txt(p.code, 30).toUpperCase(),\n      'Ativo': p.active === false ? 'não' : 'sim',\n      // Foto comprimida pelo app (data URL). Limite de célula do Sheets: 50 mil caracteres\n      'Foto': typeof p.avatarUrl === 'string' && p.avatarUrl.startsWith('data:image/') && p.avatarUrl.length < 45000 ? p.avatarUrl : '',\n      'Atualizado em': agora\n    };\n    // Aparelhos que baixaram o personal da planilha não têm o telefone: não apaga o que já está lá\n    const fone = String(p.phone ?? '').replace(/\\D/g, '').slice(0, 13);\n    if (fone) row['Telefone'] = fone;\n    return { json: row };\n  });\n"
       },
       "id": "b1000000-0000-4000-8000-000000000002",
@@ -29,8 +146,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
-        300
+        480,
+        400
       ]
     },
     {
@@ -145,8 +262,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        480,
-        300
+        720,
+        400
       ]
     }
   ],
@@ -156,7 +273,36 @@
       "main": [
         [
           {
+            "node": "É configuração?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É configuração?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Preparar Linhas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Config": {
+      "main": [
+        [
+          {
+            "node": "Gravar Config",
             "type": "main",
             "index": 0
           }
