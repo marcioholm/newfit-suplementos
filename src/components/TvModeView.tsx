@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Trophy, X } from 'lucide-react';
+import { Loader2, RotateCw, Trophy, WifiOff, X } from 'lucide-react';
 import { Personal, Sale } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
-import { Avatar, cx } from '../ui/components';
+import { Avatar, Button, cx } from '../ui/components';
 import { spring } from '../ui/motion';
 import { NewFitLogo } from './NewFitLogo';
 
@@ -12,20 +12,39 @@ interface TvModeViewProps {
   personais: Personal[];
   sales: Sale[];
   onClose: () => void;
+  loading?: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
 }
 
 const pts = (n: number) => n.toLocaleString('pt-BR');
 
-/** Ranking em tela cheia para a TV da loja. Sempre escuro, legível à distância. */
-export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClose }) => {
-  const [now, setNow] = useState(new Date());
-
+const TvClock: React.FC = () => {
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    const timer = window.setInterval(() => setNow(new Date()), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <p className="font-semibold tabular-nums tracking-[-0.02em] leading-none text-[clamp(1.75rem,3.4vw,4rem)]">
+      {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    </p>
+  );
+};
+
+/** Ranking em tela cheia para a TV da loja. Sempre escuro, legível à distância. */
+export const TvModeView: React.FC<TvModeViewProps> = ({
+  personais,
+  sales,
+  onClose,
+  loading,
+  failed,
+  onRetry
+}) => {
+  useEffect(() => {
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     return () => {
-      clearInterval(timer);
       document.body.style.overflow = overflow;
     };
   }, []);
@@ -53,7 +72,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClos
       .map((e, i) => ({ ...e, rank: i + 1 }));
   }, [personais, sales]);
 
-  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const podium = [leaderboard[1], leaderboard[0], leaderboard[2]];
 
   return createPortal(
@@ -64,7 +83,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClos
       className="theme-dark fixed inset-0 z-[90] bg-black text-white flex flex-col px-[4vw] py-[3.5vh] overflow-hidden select-none"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.2 }}
     >
       <header className="flex items-start justify-between gap-6 shrink-0">
         <div className="flex items-center gap-[1.4vw]">
@@ -79,9 +98,7 @@ export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClos
           </div>
         </div>
         <div className="flex items-start gap-4">
-          <p className="font-semibold tabular-nums tracking-[-0.02em] leading-none text-[clamp(1.75rem,3.4vw,4rem)]">
-            {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </p>
+          <TvClock />
           <button
             type="button"
             onClick={onClose}
@@ -93,7 +110,26 @@ export const TvModeView: React.FC<TvModeViewProps> = ({ personais, sales, onClos
         </div>
       </header>
 
-      {leaderboard.length === 0 ? (
+      {loading ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center" role="status">
+          <Loader2 className="w-14 h-14 animate-spin text-tint mb-5" aria-hidden />
+          <h2 className="text-[clamp(1.4rem,2.4vw,2.6rem)] font-bold tracking-[-0.02em]">Carregando ranking…</h2>
+          <p className="text-label-2 mt-2 text-[clamp(1rem,1.3vw,1.4rem)]">Buscando dados atualizados da loja.</p>
+        </div>
+      ) : failed ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <WifiOff className="w-14 h-14 text-label-2 mb-5" aria-hidden />
+          <h2 className="text-[clamp(1.4rem,2.4vw,2.6rem)] font-bold tracking-[-0.02em]">Não foi possível atualizar o ranking</h2>
+          <p className="text-label-2 mt-2 mb-6 text-[clamp(1rem,1.3vw,1.4rem)]">
+            Verifique a conexão da loja e tente novamente.
+          </p>
+          {onRetry && (
+            <Button variant="filled" size="lg" icon={<RotateCw className="w-5 h-5" />} onClick={onRetry}>
+              Tentar de novo
+            </Button>
+          )}
+        </div>
+      ) : leaderboard.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center">
           <Trophy className="w-16 h-16 text-tint mb-6" aria-hidden />
           <h2 className="text-[clamp(1.5rem,2.6vw,3rem)] font-bold tracking-[-0.02em]">O ranking do mês começa na primeira venda</h2>

@@ -59,6 +59,8 @@ export async function resizeImageToAvatar(file: File): Promise<string> {
   return canvas.toDataURL('image/jpeg', AVATAR_JPEG_QUALITY);
 }
 
+const initialsCache = new Map<string, string>();
+
 /**
  * Avatar com as iniciais do nome, gerado localmente (sem serviço externo).
  */
@@ -67,6 +69,9 @@ export function initialsAvatar(name: string): string {
   const raw = (parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
   // Só letras/números: evita quebrar o SVG com caracteres como < ou &
   const initials = raw.replace(/[^\p{L}\p{N}]/gu, '').toUpperCase() || '?';
+
+  const cached = initialsCache.get(initials);
+  if (cached) return cached;
 
   // Estilo do app Contatos: círculo cinza em degradê com iniciais brancas (bom no claro e no escuro)
   const svg =
@@ -79,7 +84,9 @@ export function initialsAvatar(name: string): string {
     `font-size="40" font-weight="600" fill="#FFFFFF">${initials}</text>` +
     `</svg>`;
 
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  initialsCache.set(initials, dataUri);
+  return dataUri;
 }
 
 /** Foto do personal ou, na falta dela, as iniciais. */

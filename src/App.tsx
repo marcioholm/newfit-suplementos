@@ -308,7 +308,7 @@ export function App() {
     ]);
 
     // O n8n grava na planilha logo depois de responder: atualiza o ranking oficial em seguida
-    if (webhookResult.success) window.setTimeout(remote.refresh, 4000);
+    if (webhookResult.success) window.setTimeout(remote.refresh, 1500);
 
     return { success: webhookResult.success, statusText: webhookResult.statusText };
   };
@@ -352,6 +352,7 @@ export function App() {
 
     if (res.success) {
       toast.show({ kind: 'success', title: 'Venda reenviada', message: `${personal.firstName} será avisado pelo WhatsApp.` });
+      window.setTimeout(remote.refresh, 1500);
     } else {
       toast.show({ kind: 'error', title: 'Reenvio falhou', message: res.statusText });
     }
@@ -378,7 +379,7 @@ export function App() {
       });
     } else {
       if (!silent) toast.show({ kind: 'success', title: `${list.length} ${list.length === 1 ? 'personal enviado' : 'personais enviados'} ao portal` });
-      window.setTimeout(remote.refresh, 4000);
+      window.setTimeout(remote.refresh, 1500);
     }
     return res;
   };
@@ -441,13 +442,21 @@ export function App() {
     toast.show({ kind: 'info', title: 'Áreas administrativas bloqueadas' });
   };
 
-  // Dados oficiais da planilha (todas as vendas, todos os aparelhos); sem eles, usa os deste aparelho
-  const remote = useRemoteData(dadosUrl(settings.webhookUrl), isTvMode ? 30000 : 60000);
-  const shared = remote.data && remote.data.personais.length > 0 ? remote.data : null;
-  const rankingPersonais = (shared?.personais ?? personais).filter((p) => !deletedPersonalIds.includes(p.id));
-  const rankingSales = (shared?.sales ?? sales).filter((s) => !deletedPersonalIds.includes(s.personalId));
-  const rankingSource = shared
-    ? `Atualizado às ${new Date(shared.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
+  // Dados oficiais da planilha (todas as vendas, todos os aparelhos); quando configurada, espera confirmação antes de exibir ao cliente
+  const remoteDadosUrl = dadosUrl(settings.webhookUrl);
+  const remote = useRemoteData(remoteDadosUrl, isTvMode ? 30000 : 60000);
+  const waitingRemote = Boolean(remoteDadosUrl) && !remote.data && remote.state.status === 'loading';
+  const failedRemote = Boolean(remoteDadosUrl) && !remote.data && remote.state.status === 'error';
+  const rankingPersonais = (remoteDadosUrl ? (remote.data?.personais ?? []) : personais).filter(
+    (p) => !deletedPersonalIds.includes(p.id)
+  );
+  const rankingSales = (remoteDadosUrl ? (remote.data?.sales ?? []) : sales).filter(
+    (s) => !deletedPersonalIds.includes(s.personalId)
+  );
+  const rankingSource = remote.data
+    ? `Atualizado às ${new Date(remote.data.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} pela planilha`
+    : remoteDadosUrl
+    ? 'Conectando à planilha…'
     : 'Dados deste aparelho';
 
   // A planilha é a fonte dos personais: traz os que faltam neste aparelho e atualiza os demais.
@@ -523,8 +532,8 @@ export function App() {
         <PersonalPortalView
           personais={rankingPersonais}
           sales={rankingSales}
-          loading={!shared && personais.length === 0 && (remote.state.status === 'loading' || remote.state.status === 'idle')}
-          failed={!shared && personais.length === 0 && remote.state.status === 'error'}
+          loading={waitingRemote}
+          failed={failedRemote}
           onRetry={remote.refresh}
           sourceNote={rankingSource}
           initialCode={portalState.code}
@@ -548,6 +557,9 @@ export function App() {
                 sourceNote={rankingSource}
                 period={period}
                 setPeriod={setPeriod}
+                loading={waitingRemote}
+                failed={failedRemote}
+                onRetry={remote.refresh}
                 onSelectPersonalForSale={handleSelectPersonalForSale}
                 onNavigateToPersonais={() => handleNavigateToTab('personais')}
                 onOpenTvMode={navProps.onOpenTvMode}
@@ -596,7 +608,16 @@ export function App() {
 
         <TabBar {...navProps} />
 
-        {isTvMode && <TvModeView personais={rankingPersonais} sales={rankingSales} onClose={() => setIsTvMode(false)} />}
+        {isTvMode && (
+          <TvModeView
+            personais={rankingPersonais}
+            sales={rankingSales}
+            loading={waitingRemote}
+            failed={failedRemote}
+            onRetry={remote.refresh}
+            onClose={() => setIsTvMode(false)}
+          />
+        )}
 
         <PinModal
           correctPin={ADMIN_PIN}

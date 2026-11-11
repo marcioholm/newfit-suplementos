@@ -53,7 +53,7 @@ const PinScreen: React.FC<PinModalProps> = ({ correctPin, onSuccess, onClose }) 
             } else {
               fail();
             }
-          }, 120);
+          }, 50);
         }
         return next;
       });
@@ -90,7 +90,7 @@ const PinScreen: React.FC<PinModalProps> = ({ correctPin, onSuccess, onClose }) 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.12 }}
     >
       <motion.div
         className="flex flex-col items-center w-full max-w-[300px]"

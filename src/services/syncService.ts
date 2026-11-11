@@ -135,51 +135,51 @@ export type RemoteState =
   | { status: 'ready'; data: PublicData }
   | { status: 'error'; message: string; data?: PublicData };
 
-const CACHE_KEY = 'newfit_public_cache';
-
 /**
  * Busca os dados públicos e atualiza de tempos em tempos (e ao voltar para a aba).
- * Guarda a última resposta para abrir rápido e funcionar sem internet.
+ * Não pré-carrega cache antigo de localStorage para nunca exibir dado desatualizado ao cliente em caso de falha.
  */
 export function useRemoteData(url: string, intervalMs = 60000) {
-  const [state, setState] = useState<RemoteState>(() => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) return { status: 'ready', data: parsePublicData(JSON.parse(cached)) };
-    } catch {
-      /* ignora */
-    }
-    return { status: url ? 'loading' : 'idle' };
-  });
+  const [state, setState] = useState<RemoteState>(() => ({
+    status: url ? 'loading' : 'idle'
+  }));
   const inFlight = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!url || inFlight.current) return;
     inFlight.current = true;
+    setState((prev) => (prev.status === 'error' && !prev.data ? { status: 'loading' } : prev));
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal
+      });
       if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
       const json = await res.json();
       const data = parsePublicData(json);
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(json));
-      } catch {
-        /* sem espaço: segue sem cache */
-      }
       setState({ status: 'ready', data });
     } catch (e: any) {
+      const msg = e?.name === 'AbortError' ? 'Tempo esgotado ao carregar dados' : e?.message || 'Falha ao carregar';
       setState((prev) => ({
         status: 'error',
-        message: e?.message || 'Falha ao carregar',
+        message: msg,
         data: prev.status === 'ready' || prev.status === 'error' ? prev.data : undefined
       }));
     } finally {
+      window.clearTimeout(timeoutId);
       inFlight.current = false;
     }
   }, [url]);
 
   useEffect(() => {
-    if (!url) return;
+    if (!url) {
+      setState({ status: 'idle' });
+      return;
+    }
+    setState({ status: 'loading' });
     refresh();
     const timer = window.setInterval(refresh, intervalMs);
     const onVisible = () => document.visibilityState === 'visible' && refresh();

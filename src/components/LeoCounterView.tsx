@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ChevronsUpDown,
   Download,
+  Loader2,
   Lock,
   MessageCircle,
   Plus,
@@ -552,6 +553,23 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
         }}
         onClose={() => setConfirmDeleteId(null)}
       />
+
+      {isSubmitting && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center px-6"
+          style={{ backgroundColor: 'rgb(var(--scrim) / var(--scrim-alpha))' }}
+          role="status"
+          aria-live="assertive"
+        >
+          <div className="material rounded-[20px] shadow-float px-7 py-6 flex flex-col items-center text-center max-w-[290px] w-full">
+            <Loader2 className="w-8 h-8 animate-spin text-tint" aria-hidden />
+            <p className="type-headline text-label mt-4">Registrando venda…</p>
+            <p className="type-footnote text-label-2 mt-1">
+              Confirmando na planilha e enviando WhatsApp{selectedPersonal ? ` para ${selectedPersonal.firstName}` : ''}.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -7,11 +7,11 @@
  */
 export const spring = {
   /** Mover/reposicionar, aparecer e sumir */
-  default: { type: 'spring', bounce: 0, duration: 0.4 } as const,
+  default: { type: 'spring', bounce: 0, duration: 0.24 } as const,
   /** Respostas rápidas (troca de segmento, indicadores) */
-  snappy: { type: 'spring', bounce: 0, duration: 0.3 } as const,
-  /** Sheets e gavetas (damping 0.8, response 0.3) — usado após arrastar */
-  sheet: { type: 'spring', bounce: 0.2, duration: 0.3 } as const
+  snappy: { type: 'spring', bounce: 0, duration: 0.18 } as const,
+  /** Sheets e gavetas (damping 0.8, response 0.24) — usado após arrastar */
+  sheet: { type: 'spring', bounce: 0.15, duration: 0.24 } as const
 };
 
 /**

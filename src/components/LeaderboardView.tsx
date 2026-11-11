@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Trophy, Tv, UserPlus } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Loader2, RotateCw, Trophy, Tv, UserPlus, WifiOff } from 'lucide-react';
 import { Personal, Sale, PeriodFilter, LeaderboardEntry } from '../types';
 import { formatCurrencyBRL } from '../services/webhookService';
 import {
@@ -16,7 +15,6 @@ import {
   SegmentedControl,
   cx
 } from '../ui/components';
-import { spring } from '../ui/motion';
 
 interface LeaderboardViewProps {
   personais: Personal[];
@@ -30,6 +28,9 @@ interface LeaderboardViewProps {
   emptyState?: { title: string; message: string };
   /** De onde vêm os dados (planilha ou aparelho) */
   sourceNote?: string;
+  loading?: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
 }
 
 const PERIODS: { value: PeriodFilter; label: string }[] = [
@@ -49,7 +50,10 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   onNavigateToPersonais,
   onOpenTvMode,
   emptyState,
-  sourceNote
+  sourceNote,
+  loading,
+  failed,
+  onRetry
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -132,7 +136,26 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
         className="mb-6 sm:max-w-[340px]"
       />
 
-      {leaderboard.length === 0 ? (
+      {loading ? (
+        <div className="pt-20 pb-16 flex flex-col items-center text-center text-label-2" role="status" aria-live="polite">
+          <Loader2 className="w-8 h-8 animate-spin text-tint" aria-hidden />
+          <p className="type-headline text-label mt-4">Carregando ranking…</p>
+          <p className="type-subhead text-label-2 mt-1">Aguardando dados atualizados da planilha.</p>
+        </div>
+      ) : failed ? (
+        <EmptyState
+          icon={<WifiOff className="w-7 h-7" />}
+          title="Não foi possível carregar o ranking"
+          message="Verifique a conexão e tente de novo para evitar mostrar dados desatualizados."
+          action={
+            onRetry && (
+              <Button variant="filled" icon={<RotateCw className="w-4 h-4" />} onClick={onRetry}>
+                Tentar de novo
+              </Button>
+            )
+          }
+        />
+      ) : leaderboard.length === 0 ? (
         <EmptyState
           icon={<Trophy className="w-7 h-7" />}
           title={emptyState?.title ?? 'Nenhum personal ainda'}
@@ -152,11 +175,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           {/* Pódio */}
           <div className="mb-8 space-y-3">
             {first && (
-              <motion.div
-                layout
-                transition={spring.default}
-                className="relative overflow-hidden rounded-[20px] bg-surface p-5 sm:p-6"
-              >
+              <div className="relative overflow-hidden rounded-[20px] bg-surface p-5 sm:p-6">
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
@@ -189,19 +208,14 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                     </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {(second || third) && (
               <div className="grid grid-cols-2 gap-3">
                 {[second, third].map((entry, i) =>
                   entry ? (
-                    <motion.div
-                      layout
-                      transition={spring.default}
-                      key={entry.personal.id}
-                      className="rounded-[16px] bg-surface p-4"
-                    >
+                    <div key={entry.personal.id} className="rounded-[16px] bg-surface p-4">
                       <div className="flex items-center justify-between">
                         <Avatar personal={entry.personal} size={44} />
                         <span className="type-headline tabular-nums text-label-2">{i + 2}º</span>
@@ -211,7 +225,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                       <p className="type-title-3 tabular-nums text-label mt-2">
                         {pts(entry.points)} <span className="type-footnote text-label-2 font-normal">pts</span>
                       </p>
-                    </motion.div>
+                    </div>
                   ) : (
                     <div key={`empty-${i}`} />
                   )
@@ -245,44 +259,43 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                 <Row title={<span className="text-label-2">Nenhum resultado para “{searchTerm}”</span>} />
               ) : (
                 displayEntries.map((entry) => (
-                  <motion.div layout="position" transition={spring.default} key={entry.personal.id}>
-                    <Row
-                      leading={
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cx(
-                              'w-6 text-center type-subhead font-semibold tabular-nums',
-                              entry.rank === 1 ? 'text-tint-text' : 'text-label-2'
-                            )}
-                          >
-                            {entry.rank}
-                          </span>
-                          <Avatar personal={entry.personal} size={40} />
-                        </div>
-                      }
-                      title={entry.personal.name}
-                      subtitle={[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
-                      trailing={
-                        <>
-                          <span className="text-right">
-                            <span className="block type-headline tabular-nums text-label">{pts(entry.points)}</span>
-                            <span className="block type-caption text-label-2 -mt-0.5">pts</span>
-                          </span>
-                          {onSelectPersonalForSale && (
-                            <Button
-                              size="sm"
-                              variant="tinted"
-                              onClick={() => onSelectPersonalForSale(entry.personal.id)}
-                              aria-label={`Lançar venda para ${entry.personal.name}`}
-                              className="hidden sm:inline-flex"
-                            >
-                              Vender
-                            </Button>
+                  <Row
+                    key={entry.personal.id}
+                    leading={
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={cx(
+                            'w-6 text-center type-subhead font-semibold tabular-nums',
+                            entry.rank === 1 ? 'text-tint-text' : 'text-label-2'
                           )}
-                        </>
-                      }
-                    />
-                  </motion.div>
+                        >
+                          {entry.rank}
+                        </span>
+                        <Avatar personal={entry.personal} size={40} />
+                      </div>
+                    }
+                    title={entry.personal.name}
+                    subtitle={[entry.personal.gym, entry.personal.code].filter(Boolean).join(' · ')}
+                    trailing={
+                      <>
+                        <span className="text-right">
+                          <span className="block type-headline tabular-nums text-label">{pts(entry.points)}</span>
+                          <span className="block type-caption text-label-2 -mt-0.5">pts</span>
+                        </span>
+                        {onSelectPersonalForSale && (
+                          <Button
+                            size="sm"
+                            variant="tinted"
+                            onClick={() => onSelectPersonalForSale(entry.personal.id)}
+                            aria-label={`Lançar venda para ${entry.personal.name}`}
+                            className="hidden sm:inline-flex"
+                          >
+                            Vender
+                          </Button>
+                        )}
+                      </>
+                    }
+                  />
                 ))
               )}
             </Group>

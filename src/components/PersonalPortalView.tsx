@@ -99,17 +99,18 @@ export const PersonalPortalView: React.FC<PersonalPortalViewProps> = ({
       </header>
 
       <main className="max-w-[760px] mx-auto px-4 sm:px-6 pb-[calc(env(safe-area-inset-bottom)+32px)]">
-        {noData && loading ? (
-          <div className="pt-24 flex flex-col items-center text-label-2" role="status">
-            <Loader2 className="w-7 h-7 animate-spin" aria-hidden />
-            <p className="type-subhead mt-3">Carregando ranking…</p>
+        {loading ? (
+          <div className="pt-24 flex flex-col items-center text-center text-label-2" role="status" aria-live="polite">
+            <Loader2 className="w-8 h-8 animate-spin text-tint" aria-hidden />
+            <p className="type-headline text-label mt-4">Carregando ranking…</p>
+            <p className="type-subhead text-label-2 mt-1">Buscando dados atualizados da loja.</p>
           </div>
-        ) : noData && failed ? (
+        ) : failed ? (
           <div className="pt-10">
             <EmptyState
               icon={<WifiOff className="w-7 h-7" />}
               title="Não foi possível carregar"
-              message="Verifique sua internet e tente de novo."
+              message="Verifique sua internet e tente de novo para ver os pontos atualizados."
               action={
                 onRetry && (
                   <Button variant="filled" icon={<RotateCw className="w-4 h-4" />} onClick={onRetry}>
