@@ -5,9 +5,10 @@
  * por isso toda foto é recortada em quadrado e comprimida antes de salvar.
  */
 
-export const AVATAR_SIZE_PX = 320;
-const AVATAR_JPEG_QUALITY = 0.82;
+export const AVATAR_SIZE_PX = 256;
 const MAX_INPUT_BYTES = 15 * 1024 * 1024; // 15 MB (fotos de celular)
+// Limite seguro de caracteres base64 para caber sempre no Google Sheets (< 50 mil) e no n8n (< 45 mil)
+const MAX_BASE64_LENGTH = 38000;
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -26,8 +27,9 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 }
 
 /**
- * Recorta a imagem no centro em formato quadrado, reduz para AVATAR_SIZE_PX
- * e devolve um data URL JPEG (~15–35 KB).
+ * Recorta a imagem no centro em formato quadrado, reduz e comprime em JPEG.
+ * Ajusta resolução/qualidade para garantir que a foto nunca ultrapasse
+ * o limite do Google Sheets (< 50 mil caracteres) nem do n8n (< 45 mil caracteres).
  */
 export async function resizeImageToAvatar(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) {
@@ -45,18 +47,34 @@ export async function resizeImageToAvatar(file: File): Promise<string> {
   const sy = (img.naturalHeight - side) / 2;
 
   const canvas = document.createElement('canvas');
-  canvas.width = AVATAR_SIZE_PX;
-  canvas.height = AVATAR_SIZE_PX;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Seu navegador não permite processar imagens.');
 
-  // Fundo escuro caso a imagem tenha transparência (PNG)
-  ctx.fillStyle = '#16171B';
-  ctx.fillRect(0, 0, AVATAR_SIZE_PX, AVATAR_SIZE_PX);
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, side, side, 0, 0, AVATAR_SIZE_PX, AVATAR_SIZE_PX);
+  // Tenta tamanhos e qualidades decrescentes até ficar abaixo de MAX_BASE64_LENGTH (~28 KB JPEG)
+  const steps = [
+    { size: 256, quality: 0.8 },
+    { size: 240, quality: 0.74 },
+    { size: 200, quality: 0.72 },
+    { size: 180, quality: 0.65 },
+    { size: 150, quality: 0.6 }
+  ];
 
-  return canvas.toDataURL('image/jpeg', AVATAR_JPEG_QUALITY);
+  let bestDataUrl = '';
+  for (const step of steps) {
+    canvas.width = step.size;
+    canvas.height = step.size;
+    ctx.fillStyle = '#16171B';
+    ctx.fillRect(0, 0, step.size, step.size);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, step.size, step.size);
+
+    bestDataUrl = canvas.toDataURL('image/jpeg', step.quality);
+    if (bestDataUrl.length <= MAX_BASE64_LENGTH) {
+      return bestDataUrl;
+    }
+  }
+
+  return bestDataUrl;
 }
 
 const initialsCache = new Map<string, string>();

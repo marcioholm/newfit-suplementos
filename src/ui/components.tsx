@@ -318,19 +318,14 @@ export const Avatar: React.FC<{
   ring?: boolean;
   className?: string;
 }> = ({ personal, size = 40, ring, className }) => {
-  // Foto corrompida ou inválida volta para as iniciais
+  // Foto corrompida ou inválida volta para as iniciais via onError nativo
   const [failed, setFailed] = React.useState(false);
-  const ref = React.useRef<HTMLImageElement>(null);
   React.useEffect(() => {
     setFailed(false);
-    // Imagens data: podem falhar antes do React ouvir o evento de erro
-    const img = ref.current;
-    if (img && img.complete && img.naturalWidth === 0 && personal.avatarUrl) setFailed(true);
   }, [personal.avatarUrl]);
   return (
     <img
-      ref={ref}
-      src={failed ? initialsAvatar(personal.name) : avatarSrc(personal)}
+      src={failed || !personal.avatarUrl ? initialsAvatar(personal.name) : personal.avatarUrl}
       onError={() => setFailed(true)}
       alt=""
       width={size}

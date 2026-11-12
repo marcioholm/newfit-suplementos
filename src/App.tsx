@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Personal, 
   Sale, 
@@ -504,9 +504,20 @@ export function App() {
   const remote = useRemoteData(remoteDadosUrl, isTvMode ? 30000 : 60000);
   const waitingRemote = Boolean(remoteDadosUrl) && !remote.data && remote.state.status === 'loading';
   const failedRemote = Boolean(remoteDadosUrl) && !remote.data && remote.state.status === 'error';
-  const rankingPersonais = (remoteDadosUrl ? (remote.data?.personais ?? []) : personais).filter(
-    (p) => !deletedPersonalIds.includes(p.id)
-  );
+  // Preserva fotos locais no ranking caso a planilha ainda não as tenha retornado
+  const rankingPersonais = useMemo(() => {
+    const list = remoteDadosUrl ? (remote.data?.personais ?? []) : personais;
+    const localById = new Map(personais.map((p) => [p.id, p]));
+    return list
+      .filter((p) => !deletedPersonalIds.includes(p.id))
+      .map((p) => {
+        const local = localById.get(p.id);
+        if (!p.avatarUrl && local?.avatarUrl) {
+          return { ...p, avatarUrl: local.avatarUrl };
+        }
+        return p;
+      });
+  }, [remoteDadosUrl, remote.data?.personais, personais, deletedPersonalIds]);
   const rankingSales = (remoteDadosUrl ? (remote.data?.sales ?? []) : sales).filter(
     (s) => !deletedPersonalIds.includes(s.personalId)
   );
@@ -541,7 +552,8 @@ export function App() {
           gym: r.gym,
           code: r.code,
           active: r.active,
-          avatarUrl: r.avatarUrl
+          // Preserva a foto do aparelho caso a planilha não tenha foto para este personal
+          avatarUrl: r.avatarUrl || local.avatarUrl
         };
         if (
           next.name !== local.name ||

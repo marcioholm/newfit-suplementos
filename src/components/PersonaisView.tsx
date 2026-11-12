@@ -780,7 +780,7 @@ const EditPersonalSheet: React.FC<{
       setCodeError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personal?.id]);
+  }, [personal?.id, personal?.avatarUrl]);
 
   const finalCode = code.trim().toUpperCase();
   const codeTaken = !!finalCode && otherCodes.includes(finalCode);
