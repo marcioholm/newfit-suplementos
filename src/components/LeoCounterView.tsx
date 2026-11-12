@@ -391,11 +391,11 @@ export const LeoCounterView: React.FC<LeoCounterViewProps> = ({
                     id="sale-personal"
                     value={personalId}
                     onChange={(e) => setPersonalId(e.target.value)}
-                    className="w-full appearance-none bg-transparent type-body text-label py-2.5 pr-7 outline-none cursor-pointer"
+                    className="w-full appearance-none bg-transparent type-body text-label py-2.5 pr-7 outline-none cursor-pointer [color-scheme:dark]"
                     required
                   >
                     {activePersonais.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <option key={p.id} value={p.id} className="bg-[#18181b] text-white">
                         {p.name}
                       </option>
                     ))}

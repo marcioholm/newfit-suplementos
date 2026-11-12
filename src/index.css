@@ -11,7 +11,7 @@
  */
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
 
     --bg: 242 242 247;          /* systemGroupedBackground */
     --surface: 255 255 255;     /* secondarySystemGroupedBackground */
@@ -109,9 +109,11 @@
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    color-scheme: dark;
   }
 
   body {
+    color-scheme: dark;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
     font-size: 100%;
     line-height: 1.47;
@@ -139,6 +141,22 @@
   select,
   textarea {
     font-size: 1rem;
+  }
+
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #18181b;
+    color: #ffffff;
+  }
+
+  select option:hover,
+  select option:focus,
+  select option:checked {
+    background-color: #27272a;
+    color: #ffffff;
   }
 
   input::placeholder,
